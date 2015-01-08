@@ -6,26 +6,30 @@ module Servant.Utils.LinksSpec where
 import Test.Hspec ( Spec, it, describe )
 
 import Servant.API
-    ( type (:<|>), ReqBody, QueryParam, MatrixParam, MatrixParams, MatrixFlag, Get, Post, Capture, type (:>) )
+    ( type (:<|>), ReqBody, QueryParam, MatrixParam, MatrixParams
+    , MatrixFlag, Get, Post, Capture, type (:>) , HTML , JSON, XML )
 import Servant.QQSpec ( (~>) )
 import Servant.Utils.Links ( IsElem, IsLink )
 
 
 type TestApi =
-       "hello" :> Capture "name" String :> QueryParam "capital" Bool :> Get Bool
-  :<|> "greet" :> ReqBody 'True :> Post Bool
-  :<|> "parent" :> MatrixParams "name" String :> "child" :> MatrixParam "gender" String :> Get String
+       "hello" :> Capture "name" String :> QueryParam "capital" Bool :> Get '[JSON] Bool
+  :<|> "greet" :> ReqBody 'True :> Post '[JSON, XML] Bool
+  :<|> "parent" :> MatrixParams "name" String :> "child" :> MatrixParam "gender" String :> Get '[JSON] String
 
-type TestLink = "hello" :> "hi" :> Get Bool
-type TestLink2 = "greet" :> Post Bool
-type TestLink3 = "parent" :> "child" :> Get String
+type TestLink = "hello" :> "hi" :> Get '[JSON] Bool
+type TestLink2 = "greet" :> Post '[XML] Bool
+type TestLink3 = "parent" :> "child" :> Get '[JSON] String
 
-type BadTestLink = "hallo" :> "hi" :> Get Bool
-type BadTestLink2 = "greet" :> Get Bool
-type BadTestLink3 = "parent" :> "child" :> MatrixFlag "male" :> Get String
+type BadTestLink = "hallo" :> "hi" :> Get '[JSON] Bool
+type BadTestLink2 = "greet" :> Get '[XML] Bool
+type BadTestLink3 = "parent" :> "child" :> MatrixFlag "male" :> Get '[JSON] String
 
-type NotALink = "hello" :> Capture "x" Bool :> Get Bool
-type NotALink2 = "hello" :> ReqBody 'True :> Get Bool
+type BadTestLink' = "hello" :> "hi" :> Get '[HTML] Bool
+type BadTestLink'2 = "greet" :> Get '[HTML] Bool
+
+type NotALink = "hello" :> Capture "x" Bool :> Get '[JSON] Bool
+type NotALink2 = "hello" :> ReqBody 'True :> Get '[JSON] Bool
 
 data Proxy x = Proxy
 class ReflectT (x::Bool) where { reflected :: Proxy x -> Bool }

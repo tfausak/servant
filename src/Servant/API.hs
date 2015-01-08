@@ -28,6 +28,9 @@ module Servant.API (
   -- | PUT requests
   module Servant.API.Put,
 
+  -- * Content Types
+  module Servant.API.ContentTypes,
+
   -- * Untyped endpoints
   -- | Plugging in a wai 'Network.Wai.Application', serving directories
   module Servant.API.Raw,
@@ -41,6 +44,7 @@ module Servant.API (
 
 import Servant.API.Alternative ( (:<|>)(..) )
 import Servant.API.Capture ( Capture )
+import Servant.API.ContentTypes ( Accept(..), MimeRender(..), HTML, XML, JSON )
 import Servant.API.Delete ( Delete )
 import Servant.API.Get ( Get )
 import Servant.API.Header ( Header )

@@ -84,15 +84,25 @@ type family IsElem a s where
     IsElem sa (MatrixParam x y :> sb)    = IsElem sa sb
     IsElem sa (MatrixParams x y :> sb)   = IsElem sa sb
     IsElem sa (MatrixFlag x :> sb)       = IsElem sa sb
+    IsElem (Get ct typ) (Get ct' typ)    = IsSubList ct ct'
+    IsElem (Post ct typ) (Post ct' typ)  = IsSubList ct ct'
+    IsElem (Put ct typ) (Put ct' typ)    = IsSubList ct ct'
     IsElem e e                           = 'True
     IsElem e a                           = 'False
 
+type family IsSubList a b where
+    IsSubList '[] b = 'True
+    IsSubList '[x] (x ': xs) = 'True
+    IsSubList '[x] (y ': ys) = IsSubList '[x] ys
+    IsSubList (x ': xs) y = IsSubList '[x] y `And` IsSubList xs y
+    IsSubList a b = 'False
+
 type family IsLink'' l where
-    IsLink'' (e :> Get x)    = IsLink' e
-    IsLink'' (e :> Post x)   = IsLink' e
-    IsLink'' (e :> Put x)    = IsLink' e
-    IsLink'' (e :> Delete)   = IsLink' e
-    IsLink'' a               = 'False
+    IsLink'' (e :> Get cts x)  = IsLink' e
+    IsLink'' (e :> Post cts x) = IsLink' e
+    IsLink'' (e :> Put cts x)  = IsLink' e
+    IsLink'' (e :> Delete)     = IsLink' e
+    IsLink'' a                 = 'False
 
 type family IsLink' e where
     IsLink' (f :: Symbol)  = 'True
@@ -124,7 +134,7 @@ class VLinkHelper f where
 instance (KnownSymbol s, VLinkHelper e) => VLinkHelper (s :> e) where
     vlh _ = "/" ++ symbolVal (Proxy :: Proxy s) ++ vlh (Proxy :: Proxy e)
 
-instance VLinkHelper (Get x) where
+instance VLinkHelper (Get y x) where
     vlh _ = ""
 
 instance VLinkHelper (Post x) where
