@@ -1,10 +1,10 @@
-{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 -- | Type safe internal links.
 --
@@ -77,7 +77,7 @@ type family IsElem a s where
     IsElem e (sa :<|> sb)                = Or (IsElem e sa) (IsElem e sb)
     IsElem (e :> sa) (e :> sb)           = IsElem sa sb
     IsElem (e :> sa) (Capture x y :> sb) = IsElem sa sb
-    IsElem sa (ReqBody x :> sb)          = IsElem sa sb
+    IsElem sa (ReqBody y x :> sb)        = IsElem sa sb
     IsElem sa (QueryParam x y :> sb)     = IsElem sa sb
     IsElem sa (QueryParams x y :> sb)    = IsElem sa sb
     IsElem sa (QueryFlag x :> sb)        = IsElem sa sb

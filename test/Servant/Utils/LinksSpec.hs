@@ -14,7 +14,7 @@ import Servant.Utils.Links ( IsElem, IsLink )
 
 type TestApi =
        "hello" :> Capture "name" String :> QueryParam "capital" Bool :> Get '[JSON] Bool
-  :<|> "greet" :> ReqBody 'True :> Post '[JSON, XML] Bool
+  :<|> "greet" :> ReqBody '[JSON] 'True :> Post '[JSON, XML] Bool
   :<|> "parent" :> MatrixParams "name" String :> "child" :> MatrixParam "gender" String :> Get '[JSON] String
 
 type TestLink = "hello" :> "hi" :> Get '[JSON] Bool
@@ -29,7 +29,7 @@ type BadTestLink' = "hello" :> "hi" :> Get '[HTML] Bool
 type BadTestLink'2 = "greet" :> Get '[HTML] Bool
 
 type NotALink = "hello" :> Capture "x" Bool :> Get '[JSON] Bool
-type NotALink2 = "hello" :> ReqBody 'True :> Get '[JSON] Bool
+type NotALink2 = "hello" :> ReqBody '[JSON] 'True :> Get '[JSON] Bool
 
 data Proxy x = Proxy
 class ReflectT (x::Bool) where { reflected :: Proxy x -> Bool }
