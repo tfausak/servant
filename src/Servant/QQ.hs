@@ -1,11 +1,11 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE GADTs                  #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE RecordWildCards        #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE TemplateHaskell        #-}
 {-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
 -- | QuasiQuoting utilities for API types.
 --
@@ -28,125 +28,130 @@
 -- @
 --
 -- Note the @/@ before a @QueryParam@!
-module Servant.QQ (sitemap) where
+module Servant.QQ  where
 
-import Control.Applicative ( (<$>) )
-import Control.Monad ( void )
-import Data.Monoid ( Monoid(..), (<>) )
-import Data.Maybe ( mapMaybe )
-import Language.Haskell.TH.Quote ( QuasiQuoter(..) )
-import Language.Haskell.TH
-    ( mkName, Type(AppT, ConT, LitT), TyLit(StrTyLit) )
-import Text.ParserCombinators.Parsec
-    ( try,
-      Parser,
-      manyTill,
-      endBy,
-      sepBy1,
-      optional,
-      optionMaybe,
-      string,
-      anyChar,
-      char,
-      spaces,
-      noneOf,
-      parse,
-      skipMany,
-      many,
-      lookAhead,
-      (<|>),
-      (<?>) )
-import Servant.API.Capture ( Capture )
-import Servant.API.Get ( Get )
-import Servant.API.Post ( Post )
-import Servant.API.Put ( Put )
-import Servant.API.Delete ( Delete )
-import Servant.API.QueryParam ( QueryParam )
-import Servant.API.MatrixParam ( MatrixParam )
-import Servant.API.ReqBody ( ReqBody )
-import Servant.API.Sub ( (:>) )
-import Servant.API.Alternative ( (:<|>) )
-
-data MethodE
-data PathElemE
-data OptsE
-data SitemapE
+import           Control.Applicative           ((<$>))
+import           Control.Monad                 (void)
+import           Data.Either                   (lefts, rights)
+import qualified Data.Map                      as Map
+import           Data.Maybe                    (mapMaybe)
+import           Data.Monoid                   (Monoid (..), (<>))
+import           Language.Haskell.TH           (TyLit (StrTyLit),
+                                                Type (AppT, ConT, LitT), mkName)
+import           Language.Haskell.TH.Quote     (QuasiQuoter (..))
+import           Servant.API.Alternative       ((:<|>))
+import           Servant.API.Capture           (Capture)
+import           Servant.API.Delete            (Delete)
+import           Servant.API.Get               (Get)
+import           Servant.API.MatrixParam       (MatrixParam)
+import           Servant.API.Post              (Post)
+import           Servant.API.Put               (Put)
+import           Servant.API.QueryParam        (QueryParam)
+import           Servant.API.ReqBody           (ReqBody)
+import           Servant.API.Sub               ((:>))
+import           Text.Parsec.Token
+import           Text.ParserCombinators.Parsec (Parser, anyChar, char, endBy,
+                                                lookAhead, many, many1,
+                                                manyTill, noneOf, notFollowedBy,
+                                                optionMaybe, optional, parse,
+                                                sepBy, sepBy1, skipMany,
+                                                skipMany1, space, spaces,
+                                                string, try, (<?>), (<|>))
 
 
-data Validation e a = Failure e
-                    | Success a
-
-instance Functor (Validation e) where
-    fmap _ (Failure e) = Failure e
-    fmap f (Success a) = Success (f a)
-
-data Exp a where
-    Method   :: String -> Exp MethodE
-    Slash    :: Exp PathElemE -> Exp PathElemE -> Exp PathElemE
-    PathElem :: String -> Exp PathElemE
-    Opts     :: String -> Exp OptsE
-    JoinOpts :: Exp OptsE -> Exp OptsE -> Exp OptsE
-    AddOpts  :: Exp SitemapE -> Exp OptsE -> Exp SitemapE
-    Line     :: Exp MethodE -> Exp PathElemE -> Exp SitemapE
-    Sitemap  :: Exp SitemapE -> Exp SitemapE -> Exp SitemapE
-
-data ParseError = ParseError Int String
-
-parseEverything :: String -> Exp SitemapE
-parseEverything str = removeComments <$> lines str
-    where removeComments = takeWhile (/= '#')
-          parseLines _  [] = []
-          parseLines lineno (x:xs) = case opts of
-                                         [] -> (parseUrlLine x):parseLines rest
-                                         xs -> (parseUrlLine x `AddOpts`
-            where (opts, rest) = span (startsWith ' ') xs
+sitemap = undefined
+qqLanguageDef :: LanguageDef st
+qqLanguageDef =
+        LanguageDef { commentStart = "{-"
+                    , commentEnd   = "}-"
+                    , commentLine  = "--"
+                    , nestedComments = False
+                    , identStart = noneOf " \t\n:/-"
+                    , identLetter = noneOf " \t\n:/-"
+                    , opStart = noneOf " \t\n:/-"
+                    , opLetter = noneOf " \t\n:/-"
+                    , reservedNames = []
+                    , reservedOpNames = ["/:"]
+                    , caseSensitive = True
+                    }
 
 
+expP :: Parser (MethodName, [Path], Handler, [Option])
+expP = expGen $ makeTokenParser qqLanguageDef
+    where
+          splitPath x = case span (/= ':') x of
+                            (xs, []) -> (xs, Nothing)
+                            (xs, ':':ys) -> (xs, Just ys)
+          expGen t@TokenParser{..} = do
+            methodName <- identifier
+            segments <- identifier `sepBy1` symbol "/"
+            handler <- many $ noneOf "\n"
+            string "\n"
+            options <- optGen t `sepBy` string "\n"
+            return (methodName, splitPath <$> segments, handler, options)
 
-parsePath :: String -> Exp PathElemE
-parsePath line = foldr1 Slash $ PathElem <$> wordsBy '/' line
+          optGen TokenParser{..} = do
+            skipMany1 space
+            optionName <- many1 $ noneOf ":"
+            maybeOptParam <- optionMaybe $ try $ char ':' >> many (noneOf "\n")
+            return (optionName, maybeOptParam)
 
-parseOpts :: Int -> [String] -> Either ParseError (Exp OptsE)
-parseOpts lineno lines = foldr1 JoinOpts $ Opts <$> lines
+parseAll :: MainParser -> (MethodName, [Path], Handler, [Option]) -> ParseResult
+parseAll MainParser{..} (met, ps, h, opts) = case Map.lookup met methodParsers of
+    Nothing -> Left $ "Unknown method: " ++ met
+    Just topMet -> undefined
+      where
+        inOpts :: String -> Maybe Option
+        inOpts = (\x -> case lookup x opts of
+                      Nothing -> Nothing
+                      Just p -> Just (x, p))
 
-parseUrlLine :: Int -> String -> Either ParseError (Exp SitemapE)
-parseUrlLine lineno line = case span '>' line of
-    ([], x) ->  Left $ ParseError lineno "Expected method and url before '>'"
-    (xs, ">") -> Left $ ParseError lineno "Expected type after '>'"
-    (xs, '>':ys) | length (words xs) /= 2 -> Left $ ParseError lineno "Expected method and url before '>'"
-                 | otherwise -> Line (Method met) (parsePath url)
-                     where met:url = words xs
+        metReq :: [Maybe Option]
+        metReq = inOpts <$> topOpts topMet
 
-wordsBy :: Char -> String -> [String]
-wordsBy c s =  case dropWhile (== c) s of
-    "" -> []
-    s' -> w : words s''
-          where (w, s'') = break (== c) s'
+        metResult :: ParseResult
+        metResult = parseTopOpts topMet metReq
 
+        lk :: Path -> ParseResult
+        lk path = case Map.lookup (fst path) pathParsers of
+                     Nothing -> Left $ "Unknown path arg: " ++ fst path
+                     Just x -> parseTopOpts x $ undefined
 
-data SitemapParser = SitemapParser
-                   { methodParsers :: [String -> Maybe Type]
-                   , pathParsers   :: [String -> Maybe Type]
-                   , optsParsers   :: [String -> Maybe Type]
-                   }
-
-
-pFirstWE :: [a -> Maybe b] -> a -> c -> Validation c b
-pFirstWE fn a c = maybe (Failure c) Success $ pFirst fn a
-    where pFirst :: [a -> Maybe b] -> a -> Maybe b
-          pFirst fns s = case mapMaybe ($ s) fns of
-                           [] -> Nothing
-                           x:_ -> Just x
+        pathResults :: [ParseResult]
+        pathResults = lk <$> ps
 
 
-joinWith :: Monoid err => (typ -> typ -> typ)
-                       -> Validation err typ
-                       -> Validation err typ
-                       -> Validation err typ
-joinWith mult (Success s1) (Success s2) = Success (s1 `mult` s2)
-joinWith _    (Failure e1) (Failure e2) = Failure (e1 <> e2)
-joinWith _    (Failure e1) _            = Failure e1
-joinWith _    _            (Failure e2) = Failure e2
+type Handler = String
+type MethodName = String
+type Option = (String, Maybe String)
+type Path = (String, Maybe String)
+type PathName = String
+type ParseResult = Either String Type
+
+data TopParser = TopParser
+                  { topOpts      :: [String]
+                  -- ^ List of opts to lookup
+                  , parseTopOpts :: [Maybe (String, Maybe String)] -> ParseResult
+                  -- ^ Function from those opts to a 'ParserResult'. The
+                  -- function is guaranteed to be applied only to a list of
+                  -- the same length as 'metOpts'.
+                  }
+
+
+data MainParser = MainParser
+                { methodParsers :: Map.Map MethodName TopParser
+                , pathParsers   :: Map.Map PathName FinalP
+                , optParsers    :: Map.Map String FinalP
+                }
+
+
+
+
+
+joinResults :: (Type -> Type -> Type) -> [Either String Type] -> Either String Type
+joinResults unionF r = case lefts r of
+                        [] -> Right $ foldr1 unionF $ rights r
+                        xs -> Left $ unlines xs
 
 pathUnion :: Type -> Type -> Type
 pathUnion a = AppT (AppT (ConT ''(:>)) a)
@@ -154,27 +159,13 @@ pathUnion a = AppT (AppT (ConT ''(:>)) a)
 optsUnion :: Type -> Type -> Type
 optsUnion a = AppT (AppT (ConT ''(:<|>)) a)
 
-data UndefinedError = UndefinedPath String
-                    | UndefinedMethod String
-                    | UndefinedOpts String
-                    deriving (Eq, Show)
 
-evalPath :: SitemapParser -> Exp PathElemE -> Validation [UndefinedError] Type
-evalPath SitemapParser{..} (PathElem path) = pFirstWE pathParsers path [UndefinedPath path]
-evalPath sp (p1 `Slash` p2) = joinWith pathUnion (evalPath sp p1) (evalPath sp p2)
-
-evalMethod :: SitemapParser -> Exp MethodE -> Validation [UndefinedError] Type
-evalMethod SitemapParser{..} (Method met) = pFirstWE methodParsers met [UndefinedMethod met]
-
-evalOpts :: SitemapParser -> Exp OptsE -> Validation [UndefinedError] Type
-evalOpts SitemapParser{..} (Opts opt) = pFirstWE optsParsers opt [UndefinedOpts opt]
-evalOpts sp (o1 `JoinOpts` o2) = joinWith optsUnion (evalOpts sp o1) (evalOpts sp o2)
-
-
-addMethodParser, addPathParser, addOptsParser :: (String -> Maybe Type) -> SitemapParser -> SitemapParser
-addMethodParser a x@SitemapParser{..} = x{ methodParsers = methodParsers ++ [a] }
-addOptsParser a x@SitemapParser{..} = x{ optsParsers = optsParsers ++ [a] }
-addPathParser a x@SitemapParser{..} = x{ pathParsers = pathParsers ++ [a] }
+{-
+addMethodParser :: String -> (String -> String -> Either String Type) -> SitemapParser -> SitemapParser
+addPathParser, addOptsParser :: String -> (String -> Either String Type) -> SitemapParser -> SitemapParser
+addMethodParser k a x@SitemapParser{..} = x{ methodParsers = Map.insert k a methodParsers }
+addOptsParser k a x@SitemapParser{..} = x{ optsParsers = Map.insert k a optsParsers}
+addPathParser k a x@SitemapParser{..} = x{ pathParsers = Map.insert k a pathParsers}
 
 -- | Finally-tagless encoding for our DSL.
 -- Keeping 'repr'' and 'repr' distinct when writing functions with an
@@ -333,10 +324,4 @@ parseAll = do
 --     * @{- ... -}@ for block
 --
 sitemap :: QuasiQuoter
-sitemap = QuasiQuoter { quoteExp = undefined
-                      , quotePat = undefined
-                      , quoteType = \x -> case parse parseAll "" x of
-                            Left err -> error $ show err
-                            Right st -> return st
-                      , quoteDec = undefined
-                      }
+-}
