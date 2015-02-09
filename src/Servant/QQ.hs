@@ -31,94 +31,121 @@
 module Servant.QQ  where
 
 import           Control.Applicative           ((<$>))
-import           Control.Monad                 (void)
+import           Control.Monad                 (join, void)
+import           Data.Char                     (isSpace)
 import           Data.Either                   (lefts, rights)
 import qualified Data.Map                      as Map
-import           Data.Maybe                    (mapMaybe)
+import           Data.Maybe                    (mapMaybe, isNothing, isJust, fromJust)
 import           Data.Monoid                   (Monoid (..), (<>))
-import           Language.Haskell.TH           (TyLit (StrTyLit),
-                                                Type (AppT, ConT, LitT), mkName)
+import           Language.Haskell.TH           (TyLit (StrTyLit), Type (AppT, ConT, LitT, PromotedNilT, PromotedConsT),
+                                                mkName)
 import           Language.Haskell.TH.Quote     (QuasiQuoter (..))
 import           Servant.API.Alternative       ((:<|>))
 import           Servant.API.Capture           (Capture)
 import           Servant.API.Delete            (Delete)
 import           Servant.API.Get               (Get)
+import           Servant.API.Header            (Header)
 import           Servant.API.MatrixParam       (MatrixParam)
 import           Servant.API.Post              (Post)
 import           Servant.API.Put               (Put)
-import           Servant.API.QueryParam        (QueryParam)
+import           Servant.API.QueryParam        (QueryFlag, QueryParam,
+                                                QueryParams)
 import           Servant.API.ReqBody           (ReqBody)
 import           Servant.API.Sub               ((:>))
 import           Text.Parsec.Token
-import           Text.ParserCombinators.Parsec (Parser, anyChar, char, endBy,
+import           Text.ParserCombinators.Parsec (oneOf, Parser, anyChar, char, endBy,
                                                 lookAhead, many, many1,
                                                 manyTill, noneOf, notFollowedBy,
                                                 optionMaybe, optional, parse,
                                                 sepBy, sepBy1, skipMany,
                                                 skipMany1, space, spaces,
-                                                string, try, (<?>), (<|>))
+                                                string, try, (<?>), (<|>), eof)
+
+import Debug.Trace
+
+sitemap :: QuasiQuoter
+sitemap = QuasiQuoter
+    { quoteExp = undefined
+    , quotePat = undefined
+    , quoteDec = undefined
+    , quoteType = \x -> case parse (expP defMainParser) "" x of
+        Left err -> error $ show err
+        Right st -> case st of
+            Left err -> error err
+            Right s -> return s
+    }
 
 
-sitemap = undefined
-qqLanguageDef :: LanguageDef st
-qqLanguageDef =
-        LanguageDef { commentStart = "{-"
-                    , commentEnd   = "}-"
-                    , commentLine  = "--"
-                    , nestedComments = False
-                    , identStart = noneOf " \t\n:/-"
-                    , identLetter = noneOf " \t\n:/-"
-                    , opStart = noneOf " \t\n:/-"
-                    , opLetter = noneOf " \t\n:/-"
-                    , reservedNames = []
-                    , reservedOpNames = ["/:"]
-                    , caseSensitive = True
-                    }
 
-
-expP :: Parser (MethodName, [Path], Handler, [Option])
-expP = expGen $ makeTokenParser qqLanguageDef
+expP :: MainParser -> Parser ParseResult
+expP mp = do
+        urls <- many1 $ spaces >> expGen
+        eof
+        case lefts urls of
+            [] -> return $ Right $ foldr1 optsUnion $ rights urls
+            xs -> return $ Left $ mconcat xs
     where
           splitPath x = case span (/= ':') x of
                             (xs, []) -> (xs, Nothing)
                             (xs, ':':ys) -> (xs, Just ys)
-          expGen t@TokenParser{..} = do
-            methodName <- identifier
-            segments <- identifier `sepBy1` symbol "/"
-            handler <- many $ noneOf "\n"
-            string "\n"
-            options <- optGen t `sepBy` string "\n"
-            return (methodName, splitPath <$> segments, handler, options)
+          expGen = do
+            methodName <- (many1 $ noneOf "\t \n/")
+            many $ oneOf "\t "
+            segments <- (many1 $ noneOf "\t\n/ ") `sepBy1` char '/'
+            {-handler <- many $ noneOf "\n"-}
+            char '\n'
+            options <- trace "here" $ optGen `endBy` char '\n'
+            return $ parseAll mp (methodName, splitPath <$> segments, undefined, options)
 
-          optGen TokenParser{..} = do
+          optGen = do
             skipMany1 space
             optionName <- many1 $ noneOf ":"
-            maybeOptParam <- optionMaybe $ try $ char ':' >> many (noneOf "\n")
-            return (optionName, maybeOptParam)
+            maybeOptParam <- trace "here2" $ optionMaybe $ try $ char ':' >> many (noneOf "\n")
+
+            trace "here3" $ return (optionName, maybeOptParam)
 
 parseAll :: MainParser -> (MethodName, [Path], Handler, [Option]) -> ParseResult
-parseAll MainParser{..} (met, ps, h, opts) = case Map.lookup met methodParsers of
-    Nothing -> Left $ "Unknown method: " ++ met
-    Just topMet -> undefined
-      where
-        inOpts :: String -> Maybe Option
-        inOpts = (\x -> case lookup x opts of
-                      Nothing -> Nothing
-                      Just p -> Just (x, p))
+parseAll MainParser{..} (met, ps, h, opts) = do
+    method <- methodP
+    path <- sequence pathP
+    option <- sequence optP
+    return $ foldr1 pathUnion (option ++ path ++ [method])
 
-        metReq :: [Maybe Option]
-        metReq = inOpts <$> topOpts topMet
+  where
+    mLookupWithErr :: String -> String -> Map.Map String v -> Either String v
+    mLookupWithErr s k m = case Map.lookup k m of
+                               Nothing -> Left $ s ++ k
+                               Just y  -> Right y
 
-        metResult :: ParseResult
-        metResult = parseTopOpts topMet metReq
+    optP :: [ParseResult]
+    optP = [ fromJust (j k) entry | (k, entry) <- opts, isJust $ j k ]
+      where j k = Map.lookup k optParsers
 
-        lk :: Path -> ParseResult
-        lk path = case Map.lookup (fst path) pathParsers of
-                     Nothing -> Left $ "Unknown path arg: " ++ fst path
-                     Just x -> parseTopOpts x $ undefined
+    pathP :: [ParseResult]
+    pathP = join . (\(k,entry) ->
+        if isNothing entry
+            then return $ Right $ LitT $ StrTyLit k
+            else do
+                (reqs, f) <- mLookupWithErr "Path type not found: " k pathParsers
+                let reqs' = (\x -> case lookup x opts of
+                        Nothing -> Left $ "Required (by path '" ++ k ++ "') option '" ++ x ++ "' not found."
+                        Just y  -> Right y) <$> reqs
+                case lefts reqs' of
+                    [] -> return $ f (entry, rights reqs')
+                    xs -> Left $ unlines xs) <$> ps
 
-        pathResults :: [ParseResult]
-        pathResults = lk <$> ps
+    methodP :: ParseResult
+    methodP = join $ (\k -> do
+        (reqs, f) <- mLookupWithErr "Method not found: " k methodParsers
+        let reqs' = (\x -> case lookup x opts of
+                Nothing -> Left $ "Required (by method '" ++ k ++ "') option '" ++ x ++ "' not found."
+                Just y  -> Right y) <$> reqs
+        case lefts reqs' of
+            [] -> return $ f $ rights reqs'
+            xs -> Left $ unlines xs) met
+
+
+
 
 
 type Handler = String
@@ -128,22 +155,82 @@ type Path = (String, Maybe String)
 type PathName = String
 type ParseResult = Either String Type
 
-data TopParser = TopParser
-                  { topOpts      :: [String]
-                  -- ^ List of opts to lookup
-                  , parseTopOpts :: [Maybe (String, Maybe String)] -> ParseResult
-                  -- ^ Function from those opts to a 'ParserResult'. The
-                  -- function is guaranteed to be applied only to a list of
-                  -- the same length as 'metOpts'.
-                  }
-
 
 data MainParser = MainParser
-                { methodParsers :: Map.Map MethodName TopParser
-                , pathParsers   :: Map.Map PathName FinalP
-                , optParsers    :: Map.Map String FinalP
-                }
+        { methodParsers :: Map.Map String ([String], [Maybe String] -> ParseResult)
+        , pathParsers   :: Map.Map String ([String], (Maybe String, [Maybe String]) -> ParseResult)
+        , optParsers    :: Map.Map String (Maybe String -> ParseResult)
+        }
 
+defMainParser :: MainParser
+defMainParser = MainParser
+    { methodParsers = Map.fromList
+        [ ("GET", (["Response"], withResponse "GET" ''Get))
+        , ("POST", (["Response"], withResponse "POST" ''Post))
+        , ("PUT", (["Response"], withResponse "PUT" ''Put))
+        , ("DELETE", ([], const . Right $ ConT ''Delete))
+        ]
+    , pathParsers = Map.fromList
+        [ ("capture", ([], capture))
+        , ("matrix", ([], matrix))
+        ]
+    , optParsers = Map.fromList
+        [ ("Request", request)
+        , ("Header", header)
+        , ("QueryParams", queryParams) -- QueryParam, QueryParams, QueryFlag
+        ]
+    }
+  where
+    removeWspace = reverse . dropWhile isSpace . reverse . dropWhile isSpace
+
+    mkCTList str = foldr (\x y -> AppT (AppT PromotedConsT x) y) PromotedNilT
+                         (ConT . mkName . removeWspace <$> wordsBy (== ',') str)
+
+    -- Methods
+    withResponse m typ [Just x] = case span (/= '|') x of
+        ([], xs) -> Left $ "Method " ++ m ++ " expects 'Response' option"
+                       ++ " to have a type to the left of '|'."
+        (xs, '|':ys) -> Right $ AppT (AppT (ConT typ) (mkCTList xs))
+                                     (ConT . mkName . removeWspace $ ys)
+    withResponse m _ _
+        = Left $ "Method " ++ m ++ "could not parse 'Response' option."
+
+    -- Paths
+    capture _ = undefined
+    matrix _ = undefined
+
+    -- Options
+    request Nothing  = Left "'Request' option must have an argument"
+    request (Just x) = case span (/= '|') x of
+        ([], xs) -> Left $ "'Request' option must have a type to the left "
+                        ++ "of '|'"
+        (xs, '|':ys) -> Right $ AppT (AppT (ConT ''ReqBody) (mkCTList xs))
+                                     (ConT . mkName . removeWspace $ ys)
+
+    header Nothing   = Left "'Header' option must have an argument"
+    header (Just x)  = case span (/= '|') x of
+        ([], xs) -> Left $ "'Header' option must have a string to the left "
+                        ++ "of '|'"
+        (xs, '|':ys) -> Right $ AppT (AppT (ConT ''Header)
+                                           (LitT . StrTyLit $ removeWspace xs))
+                                     (ConT $ mkName xs)
+
+    queryParams Nothing  = Left "'QueryParams' option must have an argument"
+    queryParams (Just x) = case lefts parts of
+        [] -> Right $ foldr1 pathUnion (toType <$> rights parts)
+        xs -> Left $ mconcat xs
+      where
+        splitType s = case span (/= ':') s of
+            (n, ':':':':t) -> Right ( LitT . StrTyLit $ removeWspace n
+                                    , removeWspace t)
+            _          -> Left $ "'QueryParams' option expects a list of "
+                              ++ "comma-separated '<name> :: <type>' strings"
+        parts = splitType <$> wordsBy (== ',') x
+        toType (name, "Bool") = AppT (ConT ''QueryFlag) name
+        toType (name, '[':xs) = AppT (AppT (ConT ''QueryParams) name)
+                                     (ConT . mkName $ init xs)
+        toType (name, xs)     = AppT (AppT (ConT ''QueryParams) name)
+                                     (ConT $ mkName xs)
 
 
 
@@ -159,13 +246,13 @@ pathUnion a = AppT (AppT (ConT ''(:>)) a)
 optsUnion :: Type -> Type -> Type
 optsUnion a = AppT (AppT (ConT ''(:<|>)) a)
 
+wordsBy     :: (Char -> Bool) -> String -> [String]
+wordsBy p s =  case dropWhile p s of
+                      "" -> []
+                      s' -> w : wordsBy p s''
+                            where (w, s'') = break p s'
 
 {-
-addMethodParser :: String -> (String -> String -> Either String Type) -> SitemapParser -> SitemapParser
-addPathParser, addOptsParser :: String -> (String -> Either String Type) -> SitemapParser -> SitemapParser
-addMethodParser k a x@SitemapParser{..} = x{ methodParsers = Map.insert k a methodParsers }
-addOptsParser k a x@SitemapParser{..} = x{ optsParsers = Map.insert k a optsParsers}
-addPathParser k a x@SitemapParser{..} = x{ pathParsers = Map.insert k a pathParsers}
 
 -- | Finally-tagless encoding for our DSL.
 -- Keeping 'repr'' and 'repr' distinct when writing functions with an

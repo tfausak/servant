@@ -11,8 +11,6 @@ module Servant.QQSpec where
 
 import Test.Hspec ( Expectation, Spec, shouldBe, it, describe, pendingWith )
 
-spec = describe "this" $ it "is" $  pendingWith "playing around"
-{-
 import Servant.API
     ( (:<|>),
       ReqBody,
@@ -32,76 +30,92 @@ import Servant.API
 
 -- Methods ---------------------------------------------------------------
 type SimpleGet = [sitemap|
-GET  hello  ()
+GET  hello
+    Response: () | JSON
 |]
 type SimpleGet' = "hello" :> Get '[JSON] ()
 type SimpleGet'' = "hello" :> Get '[JSON] Bool
 
 type SimpleGet2 = [sitemap|
-GET  hello  Bool
+GET  hello
+    Response: Bool | JSON
 |]
 type SimpleGet2' = "hello" :> Get '[JSON] Bool
 type SimpleGet2'' = "hello" :> Get '[JSON] Int
 
 type SimplePost = [sitemap|
-POST  hello  ()
+POST  hello
+    Response: () | JSON
 |]
-type SimplePost' = "hello" :> Post ()
-type SimplePost'' = "hello" :> Post Bool
+type SimplePost' = "hello" :> Post '[JSON] ()
+type SimplePost'' = "hello" :> Post '[JSON] Bool
 
 type SimplePost2 = [sitemap|
-POST  hello  Bool
+POST  hello
+    Response: Bool | JSON
 |]
-type SimplePost2' = "hello" :> Post Bool
-type SimplePost2'' = "hello" :> Post ()
+type SimplePost2' = "hello" :> Post '[JSON] Bool
+type SimplePost2'' = "hello" :> Post '[JSON] ()
 
 type SimplePut = [sitemap|
-PUT  hello  ()
+PUT  hello
+    Response: () | JSON
 |]
-type SimplePut' = "hello" :> Put ()
-type SimplePut'' = "hello" :> Put Bool
+type SimplePut' = "hello" :> Put '[JSON] ()
+type SimplePut'' = "hello" :> Put '[JSON] Bool
 
 type SimplePut2 = [sitemap|
-PUT  hello  Bool
+PUT  hello
+    Response: Bool | JSON
 |]
-type SimplePut2' = "hello" :> Put Bool
-type SimplePut2'' = "hello" :> Put ()
+type SimplePut2' = "hello" :> Put '[JSON] Bool
+type SimplePut2'' = "hello" :> Put '[JSON] ()
 
 -- Parameters ------------------------------------------------------------
 
 type SimpleReqBody = [sitemap|
-POST  hello  () -> Bool
+POST  hello
+    Request: () | JSON
+    Response: Bool | JSON
 |]
-type SimpleReqBody' = "hello" :> ReqBody () :> Post Bool
-type SimpleReqBody'' = "hello" :> ReqBody Bool :> Post ()
+type SimpleReqBody' = "hello" :> ReqBody '[JSON] () :> Post '[JSON] Bool
+type SimpleReqBody'' = "hello" :> ReqBody '[JSON] Bool :> Post '[JSON] ()
 
+{-
 type SimpleCapture = [sitemap|
-POST  hello/p:Int   Bool
+POST  hello/capture:p::Int
+    Response: Bool | JSON
 |]
-type SimpleCapture' = "hello" :> Capture "p" Int :> Post Bool
-type SimpleCapture'' = "hello" :> Capture "r" Int :> Post Bool
-type SimpleCapture''' = "hello" :> Capture "p" Bool :> Post Bool
+type SimpleCapture' = "hello" :> Capture "p" Int :> Post '[JSON] Bool
+type SimpleCapture'' = "hello" :> Capture "r" Int :> Post '[JSON] Bool
+type SimpleCapture''' = "hello" :> Capture "p" Bool :> Post '[JSON] Bool
+-}
 
 type SimpleQueryParam = [sitemap|
-POST  hello/?p:Int   Bool
+POST  hello
+    QueryParams: p :: Int
+    Response: Bool | JSON
 |]
-type SimpleQueryParam' = "hello" :> QueryParam "p" Int :> Post Bool
-type SimpleQueryParam'' = "hello" :> QueryParam "r" Int :> Post Bool
-type SimpleQueryParam''' = "hello" :> QueryParam "p" Bool :> Post Bool
+type SimpleQueryParam' = "hello" :> QueryParam "p" Int :> Post '[JSON] Bool
+type SimpleQueryParam'' = "hello" :> QueryParam "r" Int :> Post '[JSON] Bool
+type SimpleQueryParam''' = "hello" :> QueryParam "p" Bool :> Post '[JSON] Bool
 
+{-
 type SimpleMatrixParam = [sitemap|
-POST  hello;p:Int   Bool
+POST  matrix:hello|p::Int   Bool
+    Response: Bool | JSON
 |]
-type SimpleMatrixParam' = "hello" :> MatrixParam "p" Int :> Post Bool
-type SimpleMatrixParam'' = "hello" :> MatrixParam "r" Int :> Post Bool
-type SimpleMatrixParam''' = "hello" :> MatrixParam "p" Bool :> Post Bool
+type SimpleMatrixParam' = "hello" :> MatrixParam "p" Int :> Post '[JSON] Bool
+type SimpleMatrixParam'' = "hello" :> MatrixParam "r" Int :> Post '[JSON] Bool
+type SimpleMatrixParam''' = "hello" :> MatrixParam "p" Bool :> Post '[JSON] Bool
 
 type ComplexMatrixParam = [sitemap|
-POST  hello;p:Int;q:String/world;r:Int   Bool
+POST  matrix:hello|p::Int,q::String/matrix:world|r::Int
+    Response: Bool | JSON
 |]
-type ComplexMatrixParam' = "hello" :> MatrixParam "p" Int :> MatrixParam "q" String :> "world" :> MatrixParam "r" Int :> Post Bool
-type ComplexMatrixParam'' = "hello" :> MatrixParam "p" Int :> MatrixParam "q" String :> "world" :> MatrixParam "s" Int :> Post Bool
-type ComplexMatrixParam''' = "hello" :> MatrixParam "p" Int :> MatrixParam "q" String :> "world" :> MatrixParam "r" Bool :> Post Bool
+type ComplexMatrixParam' = "hello" :> MatrixParam "p" Int :> MatrixParam "q" String :> "world" :> MatrixParam "r" Int :> Post '[JSON] Bool
+type ComplexMatrixParam'' = "hello" :> MatrixParam "p" Int :> MatrixParam "q" String :> "world" :> MatrixParam "s" Int :> Post '[JSON] Bool
+type ComplexMatrixParam''' = "hello" :> MatrixParam "p" Int :> MatrixParam "q" String :> "world" :> MatrixParam "r" Bool :> Post '[JSON] Bool
 
 -- Combinations ----------------------------------------------------------
 
@@ -138,6 +152,47 @@ POST hello Bool
 |]
 type WithBlockComments2' = ("hello" :> Get '[JSON] Bool) :<|> ("hello" :> Post Bool)
 
+-- Large examples --------------------------------------------------------
+
+type LargeApi = [sitemap|
+
+GET      /an-int
+    Response: Int | JSON, XML, HTML
+    QueryParams: verbose :: Bool, age :: Int, names :: [String]
+
+POST     /post-int
+    Request: Int | JSON
+    Response: Bool | JSON
+
+DELETE   /capture:name
+    name: String
+
+PUT      /capture:name
+    name: String
+    Request: Int | JSON
+]
+
+[sitemap|
+type: LargeApi'
+server: serverForLargeApi'
+
+GET      /an-int               getAnInt
+    Response: Int | JSON, XML, HTML
+    QueryParams: verbose :: Bool, age :: Int, names :: [String]
+
+POST     /post-int             postInt
+    Request:  Int  | JSON, PlainText
+    Response: Bool | JSON, PlainText
+
+DELETE   /capture:name         deleteByName
+    name: String
+
+PUT      /capture:name         putByName
+    name: String
+    Request: Int | JSON, PlainText
+]
+
+-}
 --------------------------------------------------------------------------
 -- Spec
 --------------------------------------------------------------------------
@@ -163,14 +218,17 @@ spec = do
         it "Handles simple request body types" $ do
             (u::SimpleReqBody) ~= (u::SimpleReqBody' ) ~> True
             (u::SimpleReqBody) ~= (u::SimpleReqBody'') ~> False
+{-
         it "Handles simple captures" $ do
             (u::SimpleCapture) ~= (u::SimpleCapture' ) ~> True
             (u::SimpleCapture) ~= (u::SimpleCapture'') ~> False
             (u::SimpleCapture) ~= (u::SimpleCapture''') ~> False
+-}
         it "Handles simple querystring parameters" $ do
             (u::SimpleQueryParam) ~= (u::SimpleQueryParam' ) ~> True
             (u::SimpleQueryParam) ~= (u::SimpleQueryParam'') ~> False
             (u::SimpleQueryParam) ~= (u::SimpleQueryParam''') ~> False
+{-
         it "Handles simple matrix parameters" $ do
             (u::SimpleMatrixParam) ~= (u::SimpleMatrixParam' ) ~> True
             (u::SimpleMatrixParam) ~= (u::SimpleMatrixParam'') ~> False
@@ -187,7 +245,6 @@ spec = do
         it "Ignores inline comments" $ do
             (u::WithBlockComments) ~= (u::WithBlockComments') ~> True
             (u::WithBlockComments2) ~= (u::WithBlockComments2') ~> True
-
 -}
 
 --------------------------------------------------------------------------
