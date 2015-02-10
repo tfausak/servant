@@ -35,7 +35,8 @@ import           Control.Monad                 (join, void)
 import           Data.Char                     (isSpace)
 import           Data.Either                   (lefts, rights)
 import qualified Data.Map                      as Map
-import           Data.Maybe                    (mapMaybe, isNothing, isJust, fromJust)
+import           Data.Maybe                    (fromJust, isJust, isNothing,
+                                                mapMaybe)
 import           Data.Monoid                   (Monoid (..), (<>))
 import           Language.Haskell.TH           (TyLit (StrTyLit), Type (AppT, ConT, LitT, PromotedNilT, PromotedConsT),
                                                 mkName)
@@ -53,15 +54,16 @@ import           Servant.API.QueryParam        (QueryFlag, QueryParam,
 import           Servant.API.ReqBody           (ReqBody)
 import           Servant.API.Sub               ((:>))
 import           Text.Parsec.Token
-import           Text.ParserCombinators.Parsec (oneOf, Parser, anyChar, char, endBy,
-                                                lookAhead, many, many1,
+import           Text.ParserCombinators.Parsec (Parser, anyChar, char, endBy,
+                                                eof, lookAhead, many, many1,
                                                 manyTill, noneOf, notFollowedBy,
-                                                optionMaybe, optional, parse,
-                                                sepBy, sepBy1, skipMany,
+                                                endBy1,
+                                                oneOf, optionMaybe, optional,
+                                                parse, sepBy, sepBy1, skipMany,
                                                 skipMany1, space, spaces,
-                                                string, try, (<?>), (<|>), eof)
+                                                string, try, (<?>), (<|>))
 
-import Debug.Trace
+import           Debug.Trace
 
 sitemap :: QuasiQuoter
 sitemap = QuasiQuoter
@@ -79,8 +81,9 @@ sitemap = QuasiQuoter
 
 expP :: MainParser -> Parser ParseResult
 expP mp = do
-        urls <- many1 $ spaces >> expGen
-        eof
+        spaces
+        urls <- expGen `sepBy1` spaces
+        spaces >> eof
         case lefts urls of
             [] -> return $ Right $ foldr1 optsUnion $ rights urls
             xs -> return $ Left $ mconcat xs
@@ -89,20 +92,21 @@ expP mp = do
                             (xs, []) -> (xs, Nothing)
                             (xs, ':':ys) -> (xs, Just ys)
           expGen = do
-            methodName <- (many1 $ noneOf "\t \n/")
+            methodName <- many1 $ noneOf "\t \n/"
             many $ oneOf "\t "
-            segments <- (many1 $ noneOf "\t\n/ ") `sepBy1` char '/'
+            segments <- optional (char '/')
+                     >> many1 (noneOf "\t\n/ ") `sepBy` char '/'
             {-handler <- many $ noneOf "\n"-}
             char '\n'
-            options <- trace "here" $ optGen `endBy` char '\n'
+            options <- optGen `sepBy` char '\n'
             return $ parseAll mp (methodName, splitPath <$> segments, undefined, options)
 
           optGen = do
             skipMany1 space
             optionName <- many1 $ noneOf ":"
-            maybeOptParam <- trace "here2" $ optionMaybe $ try $ char ':' >> many (noneOf "\n")
+            maybeOptParam <- optionMaybe $ try $ char ':' >> many (noneOf "\n")
 
-            trace "here3" $ return (optionName, maybeOptParam)
+            return (optionName, maybeOptParam)
 
 parseAll :: MainParser -> (MethodName, [Path], Handler, [Option]) -> ParseResult
 parseAll MainParser{..} (met, ps, h, opts) = do
@@ -190,22 +194,39 @@ defMainParser = MainParser
     withResponse m typ [Just x] = case span (/= '|') x of
         ([], xs) -> Left $ "Method " ++ m ++ " expects 'Response' option"
                        ++ " to have a type to the left of '|'."
-        (xs, '|':ys) -> Right $ AppT (AppT (ConT typ) (mkCTList xs))
-                                     (ConT . mkName . removeWspace $ ys)
+        (xs, '|':ys) -> Right $ AppT (AppT (ConT typ) (mkCTList ys))
+                                     (ConT . mkName . removeWspace $ xs)
     withResponse m _ _
         = Left $ "Method " ++ m ++ "could not parse 'Response' option."
 
     -- Paths
-    capture _ = undefined
-    matrix _ = undefined
+    capture (Just x,_) = case span (/= ':') x of
+        ([], _) -> Left "'capture' path must have name to the right of '::'"
+        (xs, ':':':':ys) -> Right $ AppT (AppT (ConT ''Capture) (LitT $ StrTyLit xs))
+                             (ConT $ mkName ys)
+        _ -> Left "'capture' path expects name and type separated by '::'"
+    capture _ = Left "'capture' path expects an argument!"
+
+    matrix (Just x,_) = case wordsBy (== '|') x of
+        [path, mps] -> case lefts (mkTyp <$> wordsBy (== ',') mps) of
+               [] -> Right $ AppT (AppT (ConT ''(:>)) (LitT $ StrTyLit path))
+                                  (foldr1 pathUnion $ rights (mkTyp <$> wordsBy (== ',') mps))
+               xs -> Left $ mconcat xs
+
+          where mkTyp xs = case span (/= ':') xs of
+                    ([], _) -> Left "Each part of matrix should be of form '<name>::<type>'"
+                    (xs, ':':':':ys) -> Right $ AppT (AppT (ConT ''MatrixParam) (LitT $ StrTyLit xs))
+                                                       (ConT $ mkName ys)
+                    _ -> Left $ "'matrix' path could not parse: " ++ xs
+        _ -> Left "'matrix' path expects format 'matrix:<path>|<name>::<type>'"
 
     -- Options
     request Nothing  = Left "'Request' option must have an argument"
     request (Just x) = case span (/= '|') x of
         ([], xs) -> Left $ "'Request' option must have a type to the left "
                         ++ "of '|'"
-        (xs, '|':ys) -> Right $ AppT (AppT (ConT ''ReqBody) (mkCTList xs))
-                                     (ConT . mkName . removeWspace $ ys)
+        (xs, '|':ys) -> Right $ AppT (AppT (ConT ''ReqBody) (mkCTList ys))
+                                     (ConT . mkName . removeWspace $ xs)
 
     header Nothing   = Left "'Header' option must have an argument"
     header (Just x)  = case span (/= '|') x of
@@ -229,7 +250,7 @@ defMainParser = MainParser
         toType (name, "Bool") = AppT (ConT ''QueryFlag) name
         toType (name, '[':xs) = AppT (AppT (ConT ''QueryParams) name)
                                      (ConT . mkName $ init xs)
-        toType (name, xs)     = AppT (AppT (ConT ''QueryParams) name)
+        toType (name, xs)     = AppT (AppT (ConT ''QueryParam) name)
                                      (ConT $ mkName xs)
 
 
