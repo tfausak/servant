@@ -9,8 +9,7 @@
 {-# LANGUAGE UndecidableInstances   #-}
 module Servant.QQSpec where
 
-import           Test.Hspec  (Expectation, Spec, describe, it, pendingWith,
-                              shouldBe)
+import           Test.Hspec  (Expectation, Spec, describe, it, shouldBe)
 
 import           Servant.API ((:<|>), (:>), Capture, Delete, Get, HTML, JSON,
                               MatrixParam, Post, Put, QueryFlag, QueryParam,
@@ -117,6 +116,7 @@ type SimpleMatrixParam = [sitemap|
 POST  matrix:hello|p::Int
     Response: Bool | JSON
 |]
+
 type SimpleMatrixParam' = ("hello" :> MatrixParam "p" Int) :> Post '[JSON] Bool
 type SimpleMatrixParam'' = ("hello" :> MatrixParam "r" Int) :> Post '[JSON] Bool
 type SimpleMatrixParam''' = ("hello" :> MatrixParam "p" Bool) :> Post '[JSON] Bool
@@ -160,14 +160,11 @@ GET      a/longer/path
     Response: () | JSON
 |]
 
-x :: LargeApi
-x = "s"
-
-type LargeApi' = QueryFlag "verbose" :> QueryParam "age" Int :> QueryParams "names" String :> "an-int" :> Get '[JSON, XML, HTML] Int
-            :<|> ReqBody '[JSON] Int :> "post-int" :> Post '[JSON] Bool
-            :<|> Capture "name" String :> Delete
-            :<|> Capture "name" String :> "age" :> Put '[JSON] Int
-            :<|> "a" :> "longer" :> "path" :> Get '[JSON] ()
+type LargeApi' = ((QueryFlag "verbose" :> (QueryParam "age" Int :> QueryParams "names" String)) :> ("an-int" :> Get '[JSON, XML, HTML] Int))
+            :<|> ((ReqBody '[JSON] Int :> ("post-int" :> Post '[JSON] Bool))
+            :<|> ((Capture "name" String :> Delete)
+            :<|> ((Capture "name" String :> ("age" :> Put '[JSON] Int))
+            :<|> ("a" :> ("longer" :> "path" :> Get '[JSON] ())))))
 {-
 
 [sitemap|
