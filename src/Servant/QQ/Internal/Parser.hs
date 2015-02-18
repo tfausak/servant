@@ -15,14 +15,16 @@ import           Data.Either                    (isLeft, lefts, rights)
 import qualified Data.Map                       as Map
 import           Data.Maybe                     (fromJust, isJust, isNothing)
 import           Data.Monoid                    (Monoid (..))
-import           Language.Haskell.TH            (Type (AppT, ConT))
+import           Language.Haskell.TH            (Dec, Type (AppT, ConT))
 import           Servant.API.Alternative        ((:<|>))
 import           Servant.QQ.Internal.SubParsers
 import           Text.ParserCombinators.Parsec  (Parser, char, eof, lookAhead,
-                                                 many, many1, noneOf, oneOf,
+                                                 many, many1, noneOf, oneOf, sepBy1,
                                                  optionMaybe, optional, sepBy,
                                                  space, spaces, try, (<?>))
 
+data FullResult = ForDecs ParseResult ([String] -> IO [Dec])
+                | ForType ParseResult
 
 expP :: SubParsers -> Parser ParseResult
 expP mp = do
@@ -52,13 +54,25 @@ expGen mp = do
       (x:xs, ':':ys) -> (x:xs, Just ys)
       _              -> error "Empty option"
 
-optGen :: Parser (String, Maybe String)
-optGen = do
-  space >> spaces <?> "indentation"
-  optionName <- many1 $ noneOf ":"
-  maybeOptParam <- optionMaybe $ try $ char ':' >> many (noneOf "\n")
+parsePreambles :: SubParsers -> Parser [Preamble]
+parsePreambles SubParsers{..} = preamble `sepBy1` char '\n' <?> "preamble"
+  where
+    preamble = do
+        pName <- many1 $ noneOf " \t\n:"
+        char ':'
+        pContent <- many $ noneOf "\n"
+        case Map.lookup pName preambleParsers of
+            Nothing -> error $ "Unknown preamble: " ++ pName
+            Just f  -> return . f $ removeWspace pContent
 
-  return (optionName, maybeOptParam)
+
+optGen :: Parser (String, String)
+optGen = do
+    space >> spaces <?> "indentation"
+    optionName <- many1 $ noneOf ":"
+    maybeOptParam <- char ':' >> many (noneOf "\n")
+
+    return (optionName, maybeOptParam)
 
 parseAll :: SubParsers -> (MethodName, [Path], Handler, [Option]) -> ParseResult
 parseAll SubParsers{..} (met, ps, h, opts) = do
@@ -76,16 +90,15 @@ parseAll SubParsers{..} (met, ps, h, opts) = do
       where j k = Map.lookup k optParsers
 
     pathP :: [ParseResult]
-    pathP = join . (\(k,entry) ->
-        if isNothing entry
-            then return $ Right $ strLit k
-            else do
+    pathP = join . (\(k,entry) -> case entry of
+        Nothing -> return $ Right $ strLit k
+        Just e  -> do
                 (reqs, f) <- mLookupWithErr "Path type not found: " k pathParsers
                 let reqs' = [ note ("Required option not found: " ++ x)
                                    (lookup x opts)
                             | x <- reqs]
                 case lefts reqs' of
-                    [] -> return $ f (entry, rights reqs')
+                    [] -> return $ f (e, rights reqs')
                     xs -> Left $ unlines xs) <$> ps
 
     methodP :: ParseResult
@@ -97,20 +110,17 @@ parseAll SubParsers{..} (met, ps, h, opts) = do
         bimapEither unlines f $ sequenceEithers reqs' ) met
 
 
-
-
-
 type Handler = String
 type MethodName = String
-type Option = (String, Maybe String)
+type Option = (String, String)
 type Path = (String, Maybe String)
 type PathName = String
 
 
+-- * Utils
+
 optsUnion :: Type -> Type -> Type
 optsUnion a = AppT (AppT (ConT ''(:<|>)) a)
-
--- * Utils
 
 note :: a -> Maybe b -> Either a b
 note a = maybe (Left a) Right

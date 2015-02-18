@@ -85,4 +85,5 @@ test-suite spec
     , parsec
     , servant
     , string-conversions
+    , template-haskell
     , text

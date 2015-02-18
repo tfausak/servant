@@ -13,7 +13,7 @@ import           Data.List.Split            (splitOn)
 import qualified Data.Map                   as M
 import           Data.Monoid                (Monoid (..))
 import           Language.Haskell.TH.Syntax (Name, TyLit (StrTyLit), Type (ConT, AppT, PromotedNilT, PromotedConsT, LitT),
-                                             mkName)
+                                             mkName, Dec, Exp, Exp(AppE, VarE, ConE))
 import           Servant.API.Capture        (Capture)
 import           Servant.API.Delete         (Delete)
 import           Servant.API.Get            (Get)
@@ -24,10 +24,38 @@ import           Servant.API.Put            (Put)
 import           Servant.API.QueryParam     (QueryFlag, QueryParam, QueryParams)
 import           Servant.API.ReqBody        (ReqBody)
 import           Servant.API.Sub            ((:>))
+import           Servant.API.Alternative    ((:<|>))
 
 -- * Types
 
 type ParseResult = Either String Type
+
+data Preamble = TypeTransPreamble (Type -> IO Type)
+              | DecTransPreamble ([Exp] -> IO [Dec])
+              | DecTypePreamble (Type -> IO Dec)
+
+
+-- | `PreambleSubParser` parses an entry in the sitemap preamble. I.e.,
+-- 'Type' and 'Verbose' in
+--
+-- @
+-- Type: MyApi
+-- Verbose: True
+-- *************
+-- DELETE   home
+-- ...
+-- @
+--
+-- Preamble options will generally modify the behavior of *all* paths.
+data PreambleSubParser = PreambleSubParser
+    { preambleName   :: String
+    -- ^ Use to match against the preamble name (e.g. @"Type"@)
+    , preambleSubParser :: String -> Preamble
+    -- ^ Function from the contents of the preamble to a `Preamble`
+    -- modifier.
+    -- Note that if the @Preamble@ is a `DecTrans`, it will be ignored in
+    -- case the QuasiQuoter is used in type position.
+    }
 
 -- | `MethodSubParser` parses the beginning of a path line. I.e., @GET@
 -- in:
@@ -40,36 +68,38 @@ type ParseResult = Either String Type
 -- The type returned in the @Right@ of `ParseResult` by `methodSubParser`
 -- will be placed at the *end* of the final type.
 data MethodSubParser = MethodSubParser
-     { methodName      :: String
-     -- ^ Used to match against the method (e.g. @"GET"@)
-     , methodExpects   :: [String]
-     -- ^ List of options that the method requires (e.g. @"Response"@)
-     , methodSubParser :: [Maybe String] -> ParseResult
-     -- ^ Function from the contents of each option in `methodExpects` to a
-     -- `ParseResult`. This function is guaranteed to be called with a list
-     -- of the same length as @methodExpects@, with arguments in the same
-     -- order. In case @methodExpects = [ "Response" ]@, in the example
-     -- above @methodSubParser@ would be called with @[Just "Int | XML"]@.
-     }
+    { methodName      :: String
+    -- ^ Used to match against the method (e.g. @"GET"@)
+    , methodExpects   :: [String]
+    -- ^ List of options that the method requires (e.g. @"Response"@)
+    , methodSubParser :: [String] -> ParseResult
+    -- ^ Function from the contents of each option in `methodExpects` to a
+    -- `ParseResult`. This function is guaranteed to be called with a list
+    -- of the same length as @methodExpects@, with arguments in the same
+    -- order. In case @methodExpects = [ "Response" ]@, in the example
+    -- above @methodSubParser@ would be called with @[Just "Int | XML"]@.
+    }
 
 -- | `PathSubParser` parses a path segment. I.e., @capture@ in
 --
 -- @
 -- DELETE   home/capture:my::string
---      AnOption
+--      AnOption: True
 -- @
+--
+-- Path options modify the behavior of a single path segment.
 data PathSubParser = PathSubParser
-     { pathName      :: String
-     -- ^ Used to match against the path segment (e.g. @"capture"@)
-     , pathExpects   :: [String]
-     -- ^ List of options that the path segment requires.
-     , pathSubParser :: Maybe String -> [Maybe String] -> ParseResult
-     -- ^ Function from the content of the paths, plus any options
-     -- specified in `pathExpects`, to a @ParseResult@. The first argument,
-     -- in the example above, would be @"my::string"@. And the second
-     -- argument (which is guaranteed to have the same length as
-     -- `pathExpects`, with elements in the same order) would be @[Nothing]@.
-     }
+    { pathName      :: String
+    -- ^ Used to match against the path segment (e.g. @"capture"@)
+    , pathExpects   :: [String]
+    -- ^ List of options that the path segment requires.
+    , pathSubParser :: String -> [String] -> ParseResult
+    -- ^ Function from the content of the paths, plus any options
+    -- specified in `pathExpects`, to a @ParseResult@. The first argument,
+    -- in the example above, would be @"my::string"@. And the second
+    -- argument (which is guaranteed to have the same length as
+    -- `pathExpects`, with elements in the same order) would be @["True"]@.
+    }
 
 -- | `OptionSubParser` parses an option. I.e., @AnOption@ in
 --
@@ -77,39 +107,53 @@ data PathSubParser = PathSubParser
 -- DELETE   home/capture:my::string
 --      AnOption: another string
 -- @
+--
+-- Options modify the behavior of an entire route.
 data OptionSubParser = OptionSubParser
-     { optionName      :: String
-     -- ^ Used to match against the option (e.g. @"AnOption"@)
-     , optionSubParser :: Maybe String -> ParseResult
-     -- ^ Function from the option string (which may be @Nothing@ if
-     -- nothing is provided after the option string) to `ParseResult`. In
-     -- the example, the argument would be @"another string"@.
-     }
+    { optionName      :: String
+    -- ^ Used to match against the option (e.g. @"AnOption"@)
+    , optionSubParser :: String -> ParseResult
+    -- ^ Function from the option string to `ParseResult`. In
+    -- the example, the argument would be @"another string"@.
+    }
 
 -- | A data structure that includes all subparsers that will be used in
 -- intepreting a string.
 -- You should not need to construct a @SubParser@ directly; instead, use
 -- @mempty@ or `defSubParser` and `addMethodSP`, `addPathSP`, `addOptSP`.
 data SubParsers = SubParsers
-    { methodParsers :: M.Map String ([String], [Maybe String] -> ParseResult)
-    , pathParsers   :: M.Map String ( [String]
-                                      , (Maybe String, [Maybe String]) -> ParseResult
-                                      )
-    , optParsers    :: M.Map String (Maybe String -> ParseResult)
+    { preambleParsers :: M.Map String (String -> Preamble)
+    , methodParsers   :: M.Map String ([String], [String] -> ParseResult)
+    , pathParsers     :: M.Map String ([String] , (String, [String]) -> ParseResult)
+    , optParsers      :: M.Map String (String -> ParseResult)
+    , handlerParser   :: [String] -> IO [Exp]
     }
 
 
 instance Monoid SubParsers where
-    mempty = SubParsers M.empty M.empty M.empty
+    mempty = SubParsers M.empty M.empty M.empty M.empty (const $ return mempty)
     mappend a b = SubParsers
-      { methodParsers = methodParsers a `unionSP` methodParsers b
-      , pathParsers   = pathParsers a `unionSP` pathParsers b
-      , optParsers    = optParsers a `unionSP` optParsers b
+      { preambleParsers = preambleParsers a `unionSP` preambleParsers b
+      , methodParsers   = methodParsers a `unionSP` methodParsers b
+      , pathParsers     = pathParsers a `unionSP` pathParsers b
+      , optParsers      = optParsers a `unionSP` optParsers b
+      , handlerParser   = \x -> do
+                                   a' <- handlerParser a x
+                                   b' <- handlerParser b x
+                                   return $ a' ++ b'
       }
       where unionSP = M.unionWithKey (\k _ _ -> error
                                      $ "Key '" ++ k ++ "'already exists!")
 
 -- * Manipulating SubParsers
+
+addPreambleSP :: PreambleSubParser -> SubParsers -> SubParsers
+addPreambleSP PreambleSubParser{..} sp = sp {
+    preambleParsers = M.insertWith (error $ "Key '" ++ preambleName ++ "'already exists!")
+                                   preambleName
+                                   preambleSubParser
+                                   (preambleParsers sp)
+    }
 
 addMethodSP :: MethodSubParser -> SubParsers -> SubParsers
 addMethodSP MethodSubParser{..} sp = sp {
@@ -157,6 +201,19 @@ defSubParser = ffoldr addOptSP    [ request
 
 
 -- * Built-in Subparsers
+-- ** Preambles
+
+-- TODO:
+serverPreamble :: PreambleSubParser
+serverPreamble = PreambleSubParser
+    { preambleName = "Server"
+    , preambleSubParser = \name -> DecTypePreamble $ foldl1 go map VarE handlers
+    }
+    where
+      go a b = AppE (AppE (ConE ''(:<|>)) (VarE $ mkName a)) b
+
+
+
 -- ** Methods
 
 getMethodParser :: MethodSubParser
@@ -197,8 +254,7 @@ capture = PathSubParser
     , pathSubParser = go
     }
   where
-     go Nothing  _ = Left "'capture' path expects an argument!"
-     go (Just x) _ = case span (/= ':') x of
+     go x _ = case span (/= ':') x of
         ([], _) -> Left "'capture' path must have name to the right of '::'"
         (xs, ':':':':ys) -> Right $ AppT (AppT (ConT ''Capture) (strLit xs))
                              (ConT $ mkName ys)
@@ -218,8 +274,7 @@ matrix = PathSubParser
                                            (ConT $ mkName ys)
         _ -> Left $ "'matrix' path could not parse: " ++ xs
 
-    go Nothing  _ = Left "'matrix' path must have an argument"
-    go (Just x) _ = case splitOn "|" x of
+    go x _ = case splitOn "|" x of
         [path, mps] -> case lefts (mkTyp <$> splitOn "," mps) of
            [] -> Right $ appTs [ ConT ''(:>)
                                , strLit path
@@ -236,8 +291,7 @@ request = OptionSubParser
     , optionSubParser = go
     }
   where
-    go Nothing  = Left "'Request' option must have an argument"
-    go (Just x) = case splitOn "|" x of
+    go x = case splitOn "|" x of
         [xs, ys] -> Right $ appTs [ ConT ''ReqBody
                                   , mkCTList ys
                                   , ConT . mkName . removeWspace $ xs
@@ -252,9 +306,8 @@ header = OptionSubParser
     , optionSubParser = go
     }
   where
-    go Nothing   = Left "'Header' option must have an argument"
-    go (Just x)  = case splitOn "|" x of
-        [xs, ys] -> Right $ appTs [ConT ''Header, strLit xs, ConT $ mkName ys]
+    go x = case splitOn "|" x of
+        [xs, ys] -> Right $ appTs [ConT ''Header, strLit xs, ConT . mkName $ removeWspace ys]
         _        -> Left $ "'Header' option must have a string to the left "
                         ++ "of '|'"
 
@@ -265,8 +318,7 @@ queryParams = OptionSubParser
     , optionSubParser = go
     }
   where
-    go Nothing  = Left "'QueryParams' option must have an argument"
-    go (Just x) = case lefts parts of
+    go x = case lefts parts of
         [] -> Right $ foldr1 pathUnion (toType <$> rights parts)
         xs -> Left $ mconcat xs
       where
@@ -300,16 +352,14 @@ pathUnion a = AppT (AppT (ConT ''(:>)) a)
 
 
 -- Helper function for method parsers that use the 'Response' option.
-withResponse :: String -> Name -> [Maybe String] -> ParseResult
-withResponse m typ [Just x] = case splitOn "|" x of
+withResponse :: String -> Name -> [String] -> ParseResult
+withResponse m typ [x] = case splitOn "|" x of
     [xs, ys] -> Right $ foldl1 AppT [ ConT typ
                               , mkCTList ys
                               , ConT . mkName . removeWspace $ xs
                               ]
     _        -> Left $ "Method " ++ m ++ " expects 'Response' option"
                    ++ " to have a type to the left of '|'."
-withResponse m _ _
-    = Left $ "Method " ++ m ++ "could not parse 'Response' option."
 
 -- For example:
 -- mkCTList "JSON, XML" --> '[JSON, XML]
