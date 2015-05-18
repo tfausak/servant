@@ -66,7 +66,7 @@ unregister_servant_packages () {
     for (( i=${#SOURCES[@]}-1 ; i>=0 ; i-- )) ; do
         s="${SOURCES[i]}"
         echo unregistering "$s" if installed...
-        cabal exec ghc-pkg unregister "$s" || true
+        cabal sandbox hc-pkg unregister "$s" || true
     done
 }
 
