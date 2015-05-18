@@ -62,6 +62,16 @@ via_sdist () {
     $CABAL install --force-reinstalls --enable-tests ${SDISTS[@]}
 }
 
+unregister_servant_packages () {
+    for (( i=${#SOURCES[@]}-1 ; i>=0 ; i-- )) ; do
+        s="${SOURCES[i]}"
+        echo unregistering "$s" if installed...
+        cabal exec ghc-pkg unregister "$s" || true
+    done
+}
+
+unregister_servant_packages
 prepare_sandbox
 test_each
+unregister_servant_packages
 via_sdist
