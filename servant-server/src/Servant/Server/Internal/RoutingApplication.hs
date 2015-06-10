@@ -25,8 +25,9 @@ import           Servant.API                 ((:<|>) (..))
 import           Servant.Server.Internal.ServantErr
 
 type RoutingApplication =
-     Request -- ^ the request, the field 'pathInfo' may be modified by url routing
-  -> (RouteResult Response -> IO ResponseReceived) -> IO ResponseReceived
+     (RouteMismatch -> IO ResponseReceived)
+  -> Request -- ^ the request, the field 'pathInfo' may be modified by url routing
+  -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 
 -- | A wrapper around @'Either' 'RouteMismatch' a@.
 newtype RouteResult a =
@@ -90,21 +91,19 @@ toApplication ra request respond = do
                 writeIORef reqBodyRef $ Called bs
                 return B.empty
 
-  ra request{ requestBody = memoReqBody } (routingRespond . routeResult)
+  ra fails request{ requestBody = memoReqBody } respond
  where
-  routingRespond :: Either RouteMismatch Response -> IO ResponseReceived
-  routingRespond (Left NotFound) =
+  fails :: RouteMismatch -> IO ResponseReceived
+  fails NotFound =
     respond $ responseLBS notFound404 [] "not found"
-  routingRespond (Left WrongMethod) =
+  fails WrongMethod =
     respond $ responseLBS methodNotAllowed405 [] "method not allowed"
-  routingRespond (Left (InvalidBody err)) =
+  fails (InvalidBody err) =
     respond $ responseLBS badRequest400 [] $ fromString $ "invalid request body: " ++ err
-  routingRespond (Left UnsupportedMediaType) =
+  fails UnsupportedMediaType =
     respond $ responseLBS unsupportedMediaType415 [] "unsupported media type"
-  routingRespond (Left (HttpError status body)) =
+  fails (HttpError status body) =
     respond $ responseLBS status [] $ fromMaybe (BL.fromStrict $ statusMessage status) body
-  routingRespond (Right response) =
-    respond response
 
 runAction :: IO (RouteResult (EitherT ServantErr IO a))
           -> (RouteResult Response -> IO r)

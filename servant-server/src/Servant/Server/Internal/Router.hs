@@ -4,21 +4,21 @@ import           Data.Map                    (Map)
 import qualified Data.Map                    as M
 import           Data.Monoid                 ((<>))
 import           Data.Text                   (Text)
-import           Network.Wai                 (Request, pathInfo)
+import           Network.Wai                 (Application, Request, pathInfo)
 import           Servant.Server.Internal.PathInfo
 import           Servant.Server.Internal.RoutingApplication
 
 -- | Internal representation of a router.
 data Router =
-    WithRequest   (Request -> Router)
+    WithRequest      (Request -> Router)
       -- ^ current request is passed to the router
-  | StaticRouter  (Map Text Router)
+  | StaticRouter     (Map Text Router)
       -- ^ first path component used for lookup and removed afterwards
-  | DynamicRouter (Text -> Router)
+  | DynamicRouter    (Text -> Router)
       -- ^ first path component used for lookup and removed afterwards
-  | LeafRouter    RoutingApplication
+  | LeafRouter       Application
       -- ^ to be used for routes that match an empty path
-  | Choice        Router Router
+  | Choice           Router Router
       -- ^ left-biased choice between two routers
 
 -- | Smart constructor for the choice between routers.
@@ -47,26 +47,23 @@ choice router1 router2 = Choice router1 router2
 
 -- | Interpret a router as an application.
 runRouter :: Router -> RoutingApplication
-runRouter (WithRequest router) request respond =
-  runRouter (router request) request respond
-runRouter (StaticRouter table) request respond =
+runRouter (WithRequest router) fails request respond =
+  runRouter (router request) fails request respond
+runRouter (StaticRouter table) fails request respond =
   case processedPathInfo request of
     first : rest
       | Just router <- M.lookup first table
       -> let request' = request { pathInfo = rest }
-         in  runRouter router request' respond
-    _ -> respond $ failWith NotFound
-runRouter (DynamicRouter fun)  request respond =
+         in  runRouter router fails request' respond
+    _ -> fails NotFound
+runRouter (DynamicRouter fun) fails  request respond =
   case processedPathInfo request of
     first : rest
       -> let request' = request { pathInfo = rest }
-         in  runRouter (fun first) request' respond
-    _ -> respond $ failWith NotFound
-runRouter (LeafRouter app)     request respond = app request respond
-runRouter (Choice r1 r2)       request respond =
-  runRouter r1 request $ \ mResponse1 ->
-    if isMismatch mResponse1
-      then runRouter r2 request $ \ mResponse2 ->
-             respond (mResponse1 <> mResponse2)
-      else respond mResponse1
-
+         in  runRouter (fun first) fails request' respond
+    _ -> fails NotFound
+runRouter (LeafRouter app)     fails request respond = app request respond
+runRouter (Choice r1 r2)       fails request respond =
+  runRouter r1 fails' request respond
+  where fails' _ = runRouter r2 fails request respond
+  -- ^ TODO: decide whether we want error priorities here.
