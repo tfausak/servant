@@ -1,5 +1,6 @@
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveFunctor    #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell  #-}
 module Servant.Docs.Internal.Types where
 
 import           Control.Lens
@@ -21,6 +22,7 @@ data CaptureRep = CaptureRep
 
 -- * Document AST
 
+type HeaderS = (String, String)
 
 data Document = Document
   { _docName   :: P.Inline
@@ -36,16 +38,23 @@ data Endpoint = Endpoint
 data Leaf = Leaf
   { _methodType :: HTTP.Method
   , _leafDesc   :: P.Block
-  , _leafResps  :: [ReqResp]
+  , _leafResps  :: [Response]
+  , _leafReq    :: Request
   } deriving (Eq, Show)
 
-data ReqResp = ReqResp
-  { _rrStatusCode   :: HTTP.Status
-  , _rrHeaders      :: [HTTP.Header]
-  , _rrBody         :: String
+data Response = Response
+  { _respStatusCode   :: HTTP.Status
+  , _respHeaders      :: [HeaderS]
+  , _respBody         :: String
+  } deriving (Eq, Show)
+
+data Request = Request
+  { _reqHeaders :: [HeaderS]
+  , _reqBody    :: String
   } deriving (Eq, Show)
 
 makeLenses ''Document
 makeLenses ''Endpoint
 makeLenses ''Leaf
-makeLenses ''ReqResp
+makeLenses ''Response
+makeLenses ''Request
