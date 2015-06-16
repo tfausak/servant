@@ -8,36 +8,31 @@
 module Servant.DocsSpec where
 
 import           Data.Aeson
-import           Data.Proxy
 import           Data.String.Conversions (cs)
 import           GHC.Generics
 import           Test.Hspec
 
 import           Servant.API
-import           Servant.Docs.Internal
+import           Servant.Docs.Internal.Sample
 
 spec :: Spec
 spec = describe "Servant.Docs" $ do
+  hasDocsSpec
 
-  describe "markdown" $ do
-    let md = markdown (docs (Proxy :: Proxy TestApi1))
+hasDocsSpec :: Spec
+hasDocsSpec = describe "hasDocs" $ do
+  it "generates a RouteTree with all endpoints" $ pending
 
-    it "mentions supported content-types" $ do
-      md `shouldContain` "application/json"
-      md `shouldContain` "text/plain;charset=utf-8"
+{-leafRenderSpec :: Spec-}
+{-leafRenderSpec = describe "leafRender" $ do-}
+  {-it "generates a leaf with the correct information" $ do-}
+    {-let resp = ReqResp { _rrStatusCode = status-}
+    {-leafRender methodGet (Proxy :: Proxy '[JSON]) (Proxy :: Proxy Datatype1) -}
+      {-`shouldBe` Leaf { _methodType = methodGet-}
+                      {-, _leafDesc   = P.Null-}
+                      {-, _leafResps  = [("Accept", "-}
+                      {-}-}
 
-    it "mentions status codes" $ do
-      md `shouldContain` "Status code 200"
-      md `shouldContain` "Status code 201"
-
-    it "mentions methods" $ do
-      md `shouldContain` "POST"
-      md `shouldContain` "GET"
-
-    it "contains response samples" $ do
-      md `shouldContain` "{\"dt1field1\":\"field 1\",\"dt1field2\":13}"
-    it "contains request body samples" $ do
-      md `shouldContain` "17"
 -- * APIs
 
 data Datatype1 = Datatype1 { dt1field1 :: String
@@ -46,14 +41,14 @@ data Datatype1 = Datatype1 { dt1field1 :: String
 
 instance ToJSON Datatype1
 
-instance ToSample Datatype1 Datatype1 where
-  toSample _ = Just $ Datatype1 "field 1" 13
+instance ToSample Datatype1 where
+  toSample _ = Datatype1 "field 1" 13
 
-instance ToSample String String where
-  toSample _ = Just "a string"
+instance ToSample String where
+  toSample _ = "a string"
 
-instance ToSample Int Int where
-  toSample _ = Just 17
+instance ToSample Int where
+  toSample _ = 17
 
 instance MimeRender PlainText Int where
   mimeRender _ = cs . show
