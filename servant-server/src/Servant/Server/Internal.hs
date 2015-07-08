@@ -23,7 +23,8 @@ module Servant.Server.Internal
 #if !MIN_VERSION_base(4,8,0)
 import           Control.Applicative         ((<$>))
 #endif
-import           Control.Monad.Trans.Either  (EitherT)
+import           Control.Monad.IO.Class      (liftIO)
+import           Control.Monad.Trans.Except  (ExceptT, catchE, throwE)
 import qualified Data.ByteString             as B
 import qualified Data.Map                    as M
 import           Data.Maybe                  (catMaybes, fromMaybe)
@@ -59,9 +60,9 @@ import           Servant.Server.Internal.ServantErr
 class HasServer layout where
   type ServerT layout (m :: * -> *) :: *
 
-  route :: Proxy layout -> IO (RouteResult (Server layout)) -> Router
+  route :: Proxy layout -> Server layout -> Router
 
-type Server layout = ServerT layout (EitherT ServantErr IO)
+type Server layout = ServerT layout (ExceptT ServantErr IO)
 
 -- * Instances
 
@@ -80,8 +81,7 @@ instance (HasServer a, HasServer b) => HasServer (a :<|> b) where
 
   type ServerT (a :<|> b) m = ServerT a m :<|> ServerT b m
 
-  route Proxy server = choice (route pa (extractL <$> server))
-                              (route pb (extractR <$> server))
+  route Proxy (a :<|> b) = choice (route pa a) (route pb b)
     where pa = Proxy :: Proxy a
           pb = Proxy :: Proxy b
 
@@ -103,7 +103,7 @@ captured _ = fromText
 -- >
 -- > server :: Server MyApi
 -- > server = getBook
--- >   where getBook :: Text -> EitherT ServantErr IO Book
+-- >   where getBook :: Text -> ExceptT ServantErr IO Book
 -- >         getBook isbn = ...
 instance (KnownSymbol capture, FromText a, HasServer sublayout)
       => HasServer (Capture capture a :> sublayout) where
@@ -115,60 +115,54 @@ instance (KnownSymbol capture, FromText a, HasServer sublayout)
     DynamicRouter $ \ first ->
       route (Proxy :: Proxy sublayout)
             (case captured captureProxy first of
-               Nothing  -> return $ failWith NotFound
-               Just v   -> feedTo subserver v)
+               Nothing  -> const . LeafRouter . const . const $  throwE err404
+               Just v   -> subserver v)
     where captureProxy = Proxy :: Proxy (Capture capture a)
 
 
 methodRouter :: (AllCTRender ctypes a)
              => Method -> Proxy ctypes -> Status
-             -> IO (RouteResult (EitherT ServantErr IO a))
+             -> ServantT IO a
              -> Router
 methodRouter method proxy status action = LeafRouter route'
   where
     route' request respond
       | pathIsEmpty request && requestMethod request == method = do
-          runAction action respond $ \ output -> do
-            let accH = fromMaybe ct_wildcard $ lookup hAccept $ requestHeaders request
-            case handleAcceptH proxy (AcceptHeader accH) output of
-              Nothing -> failWith UnsupportedMediaType
-              Just (contentT, body) -> succeedWith $
-                responseLBS status [ ("Content-Type" , cs contentT)] body
-      | pathIsEmpty request && requestMethod request /= method =
-          respond $ failWith WrongMethod
-      | otherwise = respond $ failWith NotFound
+          output <- action
+          let accH = fromMaybe ct_wildcard $ lookup hAccept $ requestHeaders request
+          case handleAcceptH proxy (AcceptHeader accH) output of
+            Nothing -> throwE err415
+            Just (contentT, body) -> liftIO . respond $
+              responseLBS status [ ("Content-Type" , cs contentT)] body
+      | pathIsEmpty request && requestMethod request /= method = throwE err405
+      | otherwise = throwE err404
 
 methodRouterHeaders :: (GetHeaders (Headers h v), AllCTRender ctypes v)
                     => Method -> Proxy ctypes -> Status
-                    -> IO (RouteResult (EitherT ServantErr IO (Headers h v)))
+                    -> (ServantT IO (Headers h v))
                     -> Router
 methodRouterHeaders method proxy status action = LeafRouter route'
   where
     route' request respond
       | pathIsEmpty request && requestMethod request == method = do
-        runAction action respond $ \ output -> do
+          output <- action
           let accH = fromMaybe ct_wildcard $ lookup hAccept $ requestHeaders request
               headers = getHeaders output
           case handleAcceptH proxy (AcceptHeader accH) (getResponse output) of
-            Nothing -> failWith UnsupportedMediaType
-            Just (contentT, body) -> succeedWith $
+            Nothing -> throwE err415
+            Just (contentT, body) -> liftIO . respond $
               responseLBS status ( ("Content-Type" , cs contentT) : headers) body
-      | pathIsEmpty request && requestMethod request /= method =
-          respond $ failWith WrongMethod
-      | otherwise = respond $ failWith NotFound
+      | pathIsEmpty request && requestMethod request /= method = throwE err405
+      | otherwise = throwE err404
 
-methodRouterEmpty :: Method
-                  -> IO (RouteResult (EitherT ServantErr IO ()))
-                  -> Router
+methodRouterEmpty :: Method -> ServantT IO () -> Router
 methodRouterEmpty method action = LeafRouter route'
   where
     route' request respond
-      | pathIsEmpty request && requestMethod request == method = do
-          runAction action respond $ \ () ->
-            succeedWith $ responseLBS noContent204 [] ""
-      | pathIsEmpty request && requestMethod request /= method =
-          respond $ failWith WrongMethod
-      | otherwise = respond $ failWith NotFound
+      | pathIsEmpty request && requestMethod request == method =
+           liftIO . respond $ responseLBS noContent204 [] ""
+      | pathIsEmpty request && requestMethod request /= method = throwE err405
+      | otherwise = throwE err404
 
 -- | If you have a 'Delete' endpoint in your API,
 -- the handler for this endpoint is meant to delete
@@ -176,7 +170,7 @@ methodRouterEmpty method action = LeafRouter route'
 --
 -- The code of the handler will, just like
 -- for 'Servant.API.Get.Get', 'Servant.API.Post.Post' and
--- 'Servant.API.Put.Put', run in @EitherT ServantErr IO ()@.
+-- 'Servant.API.Put.Put', run in @ExceptT ServantErr IO ()@.
 -- The 'Int' represents the status code and the 'String' a message
 -- to be returned. You can use 'Control.Monad.Trans.Either.left' to
 -- painlessly error out if the conditions for a successful deletion
@@ -217,9 +211,9 @@ instance
 -- | When implementing the handler for a 'Get' endpoint,
 -- just like for 'Servant.API.Delete.Delete', 'Servant.API.Post.Post'
 -- and 'Servant.API.Put.Put', the handler code runs in the
--- @EitherT ServantErr IO@ monad, where the 'Int' represents
+-- @ExceptT ServantErr IO@ monad, where the 'Int' represents
 -- the status code and the 'String' a message, returned in case of
--- failure. You can quite handily use 'Control.Monad.Trans.EitherT.left'
+-- failure. You can quite handily use 'Control.Monad.Trans.ExceptT.left'
 -- to quickly fail if some conditions are not met.
 --
 -- If successfully returning a value, we use the type-level list, combined
@@ -278,7 +272,7 @@ instance
 -- >
 -- > server :: Server MyApi
 -- > server = viewReferer
--- >   where viewReferer :: Referer -> EitherT ServantErr IO referer
+-- >   where viewReferer :: Referer -> ExceptT ServantErr IO referer
 -- >         viewReferer referer = return referer
 instance (KnownSymbol sym, FromText a, HasServer sublayout)
       => HasServer (Header sym a :> sublayout) where
@@ -288,15 +282,15 @@ instance (KnownSymbol sym, FromText a, HasServer sublayout)
 
   route Proxy subserver = WithRequest $ \ request ->
     let mheader = fromText . decodeUtf8 =<< lookup str (requestHeaders request)
-    in  route (Proxy :: Proxy sublayout) (feedTo subserver mheader)
+    in  route (Proxy :: Proxy sublayout) (subserver mheader)
     where str = fromString $ symbolVal (Proxy :: Proxy sym)
 
 -- | When implementing the handler for a 'Post' endpoint,
 -- just like for 'Servant.API.Delete.Delete', 'Servant.API.Get.Get'
 -- and 'Servant.API.Put.Put', the handler code runs in the
--- @EitherT ServantErr IO@ monad, where the 'Int' represents
+-- @ExceptT ServantErr IO@ monad, where the 'Int' represents
 -- the status code and the 'String' a message, returned in case of
--- failure. You can quite handily use 'Control.Monad.Trans.EitherT.left'
+-- failure. You can quite handily use 'Control.Monad.Trans.ExceptT.left'
 -- to quickly fail if some conditions are not met.
 --
 -- If successfully returning a value, we use the type-level list, combined
@@ -340,9 +334,9 @@ instance
 -- | When implementing the handler for a 'Put' endpoint,
 -- just like for 'Servant.API.Delete.Delete', 'Servant.API.Get.Get'
 -- and 'Servant.API.Post.Post', the handler code runs in the
--- @EitherT ServantErr IO@ monad, where the 'Int' represents
+-- @ExceptT ServantErr IO@ monad, where the 'Int' represents
 -- the status code and the 'String' a message, returned in case of
--- failure. You can quite handily use 'Control.Monad.Trans.EitherT.left'
+-- failure. You can quite handily use 'Control.Monad.Trans.ExceptT.left'
 -- to quickly fail if some conditions are not met.
 --
 -- If successfully returning a value, we use the type-level list, combined
@@ -385,9 +379,9 @@ instance
 -- | When implementing the handler for a 'Patch' endpoint,
 -- just like for 'Servant.API.Delete.Delete', 'Servant.API.Get.Get'
 -- and 'Servant.API.Put.Put', the handler code runs in the
--- @EitherT ServantErr IO@ monad, where the 'Int' represents
+-- @ExceptT ServantErr IO@ monad, where the 'Int' represents
 -- the status code and the 'String' a message, returned in case of
--- failure. You can quite handily use 'Control.Monad.Trans.EitherT.left'
+-- failure. You can quite handily use 'Control.Monad.Trans.ExceptT.left'
 -- to quickly fail if some conditions are not met.
 --
 -- If successfully returning a value, we just require that its type has
@@ -443,7 +437,7 @@ instance
 -- >
 -- > server :: Server MyApi
 -- > server = getBooksBy
--- >   where getBooksBy :: Maybe Text -> EitherT ServantErr IO [Book]
+-- >   where getBooksBy :: Maybe Text -> ExceptT ServantErr IO [Book]
 -- >         getBooksBy Nothing       = ...return all books...
 -- >         getBooksBy (Just author) = ...return books by the given author...
 instance (KnownSymbol sym, FromText a, HasServer sublayout)
@@ -460,7 +454,7 @@ instance (KnownSymbol sym, FromText a, HasServer sublayout)
             Just Nothing  -> Nothing -- param present with no value -> Nothing
             Just (Just v) -> fromText v -- if present, we try to convert to
                                         -- the right type
-    in route (Proxy :: Proxy sublayout) (feedTo subserver param)
+    in route (Proxy :: Proxy sublayout) (subserver param)
     where paramname = cs $ symbolVal (Proxy :: Proxy sym)
 
 -- | If you use @'QueryParams' "authors" Text@ in one of the endpoints for your API,
@@ -480,7 +474,7 @@ instance (KnownSymbol sym, FromText a, HasServer sublayout)
 -- >
 -- > server :: Server MyApi
 -- > server = getBooksBy
--- >   where getBooksBy :: [Text] -> EitherT ServantErr IO [Book]
+-- >   where getBooksBy :: [Text] -> ExceptT ServantErr IO [Book]
 -- >         getBooksBy authors = ...return all books by these authors...
 instance (KnownSymbol sym, FromText a, HasServer sublayout)
       => HasServer (QueryParams sym a :> sublayout) where
@@ -495,7 +489,7 @@ instance (KnownSymbol sym, FromText a, HasServer sublayout)
         -- corresponding values
         parameters = filter looksLikeParam querytext
         values = catMaybes $ map (convert . snd) parameters
-    in  route (Proxy :: Proxy sublayout) (feedTo subserver values)
+    in  route (Proxy :: Proxy sublayout) (subserver values)
     where paramname = cs $ symbolVal (Proxy :: Proxy sym)
           looksLikeParam (name, _) = name == paramname || name == (paramname <> "[]")
           convert Nothing = Nothing
@@ -511,7 +505,7 @@ instance (KnownSymbol sym, FromText a, HasServer sublayout)
 -- >
 -- > server :: Server MyApi
 -- > server = getBooks
--- >   where getBooks :: Bool -> EitherT ServantErr IO [Book]
+-- >   where getBooks :: Bool -> ExceptT ServantErr IO [Book]
 -- >         getBooks onlyPublished = ...return all books, or only the ones that are already published, depending on the argument...
 instance (KnownSymbol sym, HasServer sublayout)
       => HasServer (QueryFlag sym :> sublayout) where
@@ -525,7 +519,7 @@ instance (KnownSymbol sym, HasServer sublayout)
           Just Nothing  -> True  -- param is there, with no value
           Just (Just v) -> examine v -- param with a value
           Nothing       -> False -- param not in the query string
-    in  route (Proxy :: Proxy sublayout) (feedTo subserver param)
+    in  route (Proxy :: Proxy sublayout) (subserver param)
     where paramname = cs $ symbolVal (Proxy :: Proxy sym)
           examine v | v == "true" || v == "1" || v == "" = True
                     | otherwise = False
@@ -551,7 +545,7 @@ parseMatrixText = parseQueryText
 -- >
 -- > server :: Server MyApi
 -- > server = getBooksBy
--- >   where getBooksBy :: Maybe Text -> EitherT ServantErr IO [Book]
+-- >   where getBooksBy :: Maybe Text -> ExceptT ServantErr IO [Book]
 -- >         getBooksBy Nothing       = ...return all books...
 -- >         getBooksBy (Just author) = ...return books by the given author...
 instance (KnownSymbol sym, FromText a, HasServer sublayout)
@@ -569,8 +563,8 @@ instance (KnownSymbol sym, FromText a, HasServer sublayout)
                     Just Nothing  -> Nothing -- param present with no value -> Nothing
                     Just (Just v) -> fromText v -- if present, we try to convert to
                                           -- the right type
-              route (Proxy :: Proxy sublayout) (feedTo subserver param)
-      _   -> route (Proxy :: Proxy sublayout) (feedTo subserver Nothing)
+              route (Proxy :: Proxy sublayout) (subserver param)
+      _   -> route (Proxy :: Proxy sublayout) (subserver Nothing)
 
     where paramname = cs $ symbolVal (Proxy :: Proxy sym)
 
@@ -591,7 +585,7 @@ instance (KnownSymbol sym, FromText a, HasServer sublayout)
 -- >
 -- > server :: Server MyApi
 -- > server = getBooksBy
--- >   where getBooksBy :: [Text] -> EitherT ServantErr IO [Book]
+-- >   where getBooksBy :: [Text] -> ExceptT ServantErr IO [Book]
 -- >         getBooksBy authors = ...return all books by these authors...
 instance (KnownSymbol sym, FromText a, HasServer sublayout)
       => HasServer (MatrixParams sym a :> sublayout) where
@@ -608,8 +602,8 @@ instance (KnownSymbol sym, FromText a, HasServer sublayout)
                   -- corresponding values
                   parameters = filter looksLikeParam matrixtext
                   values = catMaybes $ map (convert . snd) parameters
-              route (Proxy :: Proxy sublayout) (feedTo subserver values)
-      _ -> route (Proxy :: Proxy sublayout) (feedTo subserver [])
+              route (Proxy :: Proxy sublayout) (subserver values)
+      _ -> route (Proxy :: Proxy sublayout) (subserver [])
 
     where paramname = cs $ symbolVal (Proxy :: Proxy sym)
           looksLikeParam (name, _) = name == paramname || name == (paramname <> "[]")
@@ -626,7 +620,7 @@ instance (KnownSymbol sym, FromText a, HasServer sublayout)
 -- >
 -- > server :: Server MyApi
 -- > server = getBooks
--- >   where getBooks :: Bool -> EitherT ServantErr IO [Book]
+-- >   where getBooks :: Bool -> ExceptT ServantErr IO [Book]
 -- >         getBooks onlyPublished = ...return all books, or only the ones that are already published, depending on the argument...
 instance (KnownSymbol sym, HasServer sublayout)
       => HasServer (MatrixFlag sym :> sublayout) where
@@ -642,10 +636,10 @@ instance (KnownSymbol sym, HasServer sublayout)
                     Just Nothing  -> True  -- param is there, with no value
                     Just (Just v) -> examine v -- param with a value
                     Nothing       -> False -- param not in the query string
-  
-              route (Proxy :: Proxy sublayout) (feedTo subserver param)
-  
-      _ -> route (Proxy :: Proxy sublayout) (feedTo subserver False)
+
+              route (Proxy :: Proxy sublayout) (subserver param)
+
+      _ -> route (Proxy :: Proxy sublayout) (subserver False)
 
     where paramname = cs $ symbolVal (Proxy :: Proxy sym)
           examine v | v == "true" || v == "1" || v == "" = True
@@ -663,11 +657,7 @@ instance HasServer Raw where
 
   type ServerT Raw m = Application
 
-  route Proxy rawApplication = LeafRouter $ \ request respond -> do
-    r <- rawApplication
-    case r of
-      RR (Left err)  -> respond $ failWith err
-      RR (Right app) -> app request (respond . succeedWith)
+  route Proxy = LeafRouter . liftApplication
 
 -- | If you use 'ReqBody' in one of the endpoints for your API,
 -- this automatically requires your server-side handler to be a function
@@ -687,7 +677,7 @@ instance HasServer Raw where
 -- >
 -- > server :: Server MyApi
 -- > server = postBook
--- >   where postBook :: Book -> EitherT ServantErr IO Book
+-- >   where postBook :: Book -> ExceptT ServantErr IO Book
 -- >         postBook book = ...insert into your db...
 instance ( AllCTUnrender list a, HasServer sublayout
          ) => HasServer (ReqBody list a :> sublayout) where
@@ -703,12 +693,12 @@ instance ( AllCTUnrender list a, HasServer sublayout
       -- http://www.w3.org/2001/tag/2002/0129-mime
       let contentTypeH = fromMaybe "application/octet-stream"
                        $ lookup hContentType $ requestHeaders request
-      mrqbody <- handleCTypeH (Proxy :: Proxy list) (cs contentTypeH)
+      mrqbody <- liftIO $ handleCTypeH (Proxy :: Proxy list) (cs contentTypeH)
              <$> lazyRequestBody request
       case mrqbody of
-        Nothing -> return $ failWith $ UnsupportedMediaType
-        Just (Left e) -> return $ failWith $ InvalidBody e
-        Just (Right v) -> feedTo subserver v
+        Nothing -> throwE err415
+        Just (Left e) -> throwE err404
+        Just (Right v) -> subserver v
 
 -- | Make sure the incoming request starts with @"/path"@, strip it and
 -- pass the rest of the request path to @sublayout@.

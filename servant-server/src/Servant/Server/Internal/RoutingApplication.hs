@@ -8,7 +8,8 @@ module Servant.Server.Internal.RoutingApplication where
 import           Control.Applicative         (Applicative, (<$>))
 import           Data.Monoid                 (Monoid, mappend, mempty)
 #endif
-import           Control.Monad.Trans.Either  (EitherT, runEitherT)
+import           Control.Error.Util          (exceptT)
+import           Control.Monad.IO.Class      (liftIO)
 import qualified Data.ByteString             as B
 import qualified Data.ByteString.Lazy        as BL
 import           Data.IORef                  (newIORef, readIORef, writeIORef)
@@ -24,120 +25,23 @@ import           Network.Wai                 (Application, Request, Response,
 import           Servant.API                 ((:<|>) (..))
 import           Servant.Server.Internal.ServantErr
 
-type RoutingApplication =
-     (RouteMismatch -> IO ResponseReceived)
-  -> Request -- ^ the request, the field 'pathInfo' may be modified by url routing
-  -> (Response -> IO ResponseReceived) -> IO ResponseReceived
+type RoutingApplication = Request -> (Response -> IO ResponseReceived)
+                       -> ServantT IO ResponseReceived
 
--- | A wrapper around @'Either' 'RouteMismatch' a@.
-newtype RouteResult a =
-  RR { routeResult :: Either RouteMismatch a }
-  deriving (Eq, Show, Functor, Applicative)
+runAction :: ServantT IO a -> (a -> Response) -> RoutingApplication
+runAction action s _ respond = action >>= liftIO . respond . s
 
--- | If we get a `Right`, it has precedence over everything else.
---
--- This in particular means that if we could get several 'Right's,
--- only the first we encounter would be taken into account.
-instance Monoid (RouteResult a) where
-  mempty = RR $ Left mempty
+liftApplication :: Application -> RoutingApplication
+liftApplication app req respond = liftIO $ app req respond
 
-  RR (Left x)  `mappend` RR (Left y)  = RR $ Left (x <> y)
-  RR (Left _)  `mappend` RR (Right y) = RR $ Right y
-  r            `mappend` _            = r
+feedTo :: Functor f => f (a -> b) -> a -> f b
+feedTo f x = ($ x) <$> f
 
--- Note that the ordering of the constructors has great significance! It
--- determines the Ord instance and, consequently, the monoid instance.
-data RouteMismatch =
-    NotFound           -- ^ the usual "not found" error
-  | WrongMethod        -- ^ a more informative "you just got the HTTP method wrong" error
-  | UnsupportedMediaType -- ^ request body has unsupported media type
-  | InvalidBody String -- ^ an even more informative "your json request body wasn't valid" error
-  | HttpError Status (Maybe BL.ByteString)  -- ^ an even even more informative arbitrary HTTP response code error.
-  deriving (Eq, Ord, Show)
+extractL :: Functor f => f (a :<|> b) -> f a
+extractL = fmap go
+  where go (a :<|> _) = a
 
-instance Monoid RouteMismatch where
-  mempty = NotFound
-  -- The following isn't great, since it picks @InvalidBody@ based on
-  -- alphabetical ordering, but any choice would be arbitrary.
-  --
-  -- "As one judge said to the other, 'Be just and if you can't be just, be
-  -- arbitrary'" -- William Burroughs
-  mappend = max
-
-data ReqBodyState = Uncalled
-                  | Called !B.ByteString
-                  | Done !B.ByteString
-
-toApplication :: RoutingApplication -> Application
-toApplication ra request respond = do
-  reqBodyRef <- newIORef Uncalled
-  -- We may need to consume the requestBody more than once.  In order to
-  -- maintain the illusion that 'requestBody' works as expected,
-  -- 'ReqBodyState' is introduced, and the complete body is memoized and
-  -- returned as many times as requested with empty "Done" marker chunks in
-  -- between.
-  -- See https://github.com/haskell-servant/servant/issues/3
-  let memoReqBody = do
-          ior <- readIORef reqBodyRef
-          case ior of
-            Uncalled -> do
-                r <- BL.toStrict <$> strictRequestBody request
-                writeIORef reqBodyRef $ Done r
-                return r
-            Called bs -> do
-                writeIORef reqBodyRef $ Done bs
-                return bs
-            Done bs -> do
-                writeIORef reqBodyRef $ Called bs
-                return B.empty
-
-  ra fails request{ requestBody = memoReqBody } respond
- where
-  fails :: RouteMismatch -> IO ResponseReceived
-  fails NotFound =
-    respond $ responseLBS notFound404 [] "not found"
-  fails WrongMethod =
-    respond $ responseLBS methodNotAllowed405 [] "method not allowed"
-  fails (InvalidBody err) =
-    respond $ responseLBS badRequest400 [] $ fromString $ "invalid request body: " ++ err
-  fails UnsupportedMediaType =
-    respond $ responseLBS unsupportedMediaType415 [] "unsupported media type"
-  fails (HttpError status body) =
-    respond $ responseLBS status [] $ fromMaybe (BL.fromStrict $ statusMessage status) body
-
-runAction :: IO (RouteResult (EitherT ServantErr IO a))
-          -> (RouteResult Response -> IO r)
-          -> (a -> RouteResult Response)
-          -> IO r
-runAction action respond k = do
-  r <- action
-  go r
-  where
-    go (RR (Right a))  = do
-      e <- runEitherT a
-      respond $ case e of
-        Right x  -> k x
-        Left err -> succeedWith $ responseServantErr err
-    go (RR (Left err)) = respond $ failWith err
-
-feedTo :: IO (RouteResult (a -> b)) -> a -> IO (RouteResult b)
-feedTo f x = (($ x) <$>) <$> f
-
-extractL :: RouteResult (a :<|> b) -> RouteResult a
-extractL (RR (Right (a :<|> _))) = RR (Right a)
-extractL (RR (Left err))         = RR (Left err)
-
-extractR :: RouteResult (a :<|> b) -> RouteResult b
-extractR (RR (Right (_ :<|> b))) = RR (Right b)
-extractR (RR (Left err))         = RR (Left err)
-
-failWith :: RouteMismatch -> RouteResult a
-failWith = RR . Left
-
-succeedWith :: a -> RouteResult a
-succeedWith = RR . Right
-
-isMismatch :: RouteResult a -> Bool
-isMismatch (RR (Left _)) = True
-isMismatch _             = False
+extractR :: Functor f => f (a :<|> b) -> f b
+extractR = fmap go
+  where go (_ :<|> b) = b
 

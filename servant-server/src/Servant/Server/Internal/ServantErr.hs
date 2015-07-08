@@ -2,10 +2,11 @@
 {-# LANGUAGE RecordWildCards   #-}
 module Servant.Server.Internal.ServantErr where
 
-import qualified Data.ByteString.Char8     as BS
-import qualified Data.ByteString.Lazy      as LBS
-import qualified Network.HTTP.Types        as HTTP
-import           Network.Wai               (responseLBS, Response)
+import           Control.Monad.Trans.Except (ExceptT)
+import qualified Data.ByteString.Char8      as BS
+import qualified Data.ByteString.Lazy       as LBS
+import qualified Network.HTTP.Types         as HTTP
+import           Network.Wai                (responseLBS, Response)
 
 data ServantErr = ServantErr { errHTTPCode     :: Int
                              , errReasonPhrase :: String
@@ -13,10 +14,13 @@ data ServantErr = ServantErr { errHTTPCode     :: Int
                              , errHeaders      :: [HTTP.Header]
                              } deriving (Show, Eq)
 
+type ServantT m a = ExceptT ServantErr m a
+
 responseServantErr :: ServantErr -> Response
 responseServantErr ServantErr{..} = responseLBS status errHeaders errBody
   where
     status = HTTP.mkStatus errHTTPCode (BS.pack errReasonPhrase)
+
 
 err300 :: ServantErr
 err300 = ServantErr { errHTTPCode = 300
