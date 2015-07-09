@@ -33,6 +33,9 @@ module Servant.API (
   module Servant.API.Patch,
   -- | @PATCH@ requests
 
+  -- * Redirects
+  module Servant.API.Redirect,
+
   -- * Content Types
   module Servant.API.ContentTypes,
   -- | Serializing and deserializing types based on @Accept@ and
@@ -49,8 +52,12 @@ module Servant.API (
   module Servant.Common.Text,
   -- | Classes and instances for types that can be converted to and from @Text@
 
+  -- * Instance-writing utilities
+  module Servant.Common.Methods,
+  -- | Classes for retrieving value-level methods for method combinators
+
   -- * Utilities
-  module Servant.Utils.Links,
+  module Servant.Utils.Links
   -- | Type-safe internal URIs
   ) where
 
@@ -72,6 +79,11 @@ import           Servant.API.Put             (Put)
 import           Servant.API.QueryParam      (QueryFlag, QueryParam,
                                               QueryParams)
 import           Servant.API.Raw             (Raw)
+import           Servant.API.Redirect        (Found, MovedPermanently,
+                                              PermanentRedirect,
+                                              RedirectConstraints, SeeOther,
+                                              TemporaryRedirect,
+                                              redirectStatusCode)
 import           Servant.API.ReqBody         (ReqBody)
 import           Servant.API.ResponseHeaders (AddHeader (addHeader),
                                               BuildHeadersTo (buildHeadersTo),
@@ -79,7 +91,10 @@ import           Servant.API.ResponseHeaders (AddHeader (addHeader),
                                               HList (..), Headers (..),
                                               getHeadersHList, getResponse)
 import           Servant.API.Sub             ((:>))
+import           Servant.Common.Methods      (KnownMethod (..))
 import           Servant.Common.Text         (FromText (..), ToText (..))
 import           Servant.Utils.Links         (HasLink (..), IsElem, IsElem',
-                                              URI (..), safeLink)
+                                              TaggedURI, URI (..), safeLink,
+                                              safeTaggedLink, unTagURI,
+                                              unsafeTagURI)
 

@@ -1,9 +1,11 @@
 {-# LANGUAGE CPP                    #-}
 {-# LANGUAGE ConstraintKinds        #-}
 {-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE PolyKinds              #-}
+{-# LANGUAGE RankNTypes             #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE TypeOperators          #-}
@@ -90,7 +92,10 @@ module Servant.Utils.Links (
   --
   -- | Note that 'URI' is Network.URI.URI from the network-uri package.
     safeLink
+  , safeTaggedLink
   , URI(..)
+  , TaggedURI(unTagURI)
+  , unsafeTagURI
   -- * Adding custom types
   , HasLink(..)
   , linkURI
@@ -99,6 +104,8 @@ module Servant.Utils.Links (
   -- * Illustrative exports
   , IsElem
   , Or
+  -- * Other predicates
+  , IsMethod
 ) where
 
 import Data.List
@@ -135,6 +142,17 @@ data Link = Link
   { _segments :: [String] -- ^ Segments of "foo/bar" would be ["foo", "bar"]
   , _queryParams :: [Param Query]
   } deriving Show
+
+-- | A type with an URI that is guaranteed to belong to the API type it is
+-- tagged with (modulo uses of unsafe functions). To construct a @TaggedURI@,
+-- use 'safeTaggedLink'
+newtype TaggedURI a = TaggedURI { unTagURI :: URI }
+
+
+-- | Unsafely tag a URI with an API. Only use this if you have an
+-- unresonable penchant for palindromic status codes.
+unsafeTagURI :: URI -> TaggedURI a
+unsafeTagURI = TaggedURI
 
 -- | If either a or b produce an empty constraint, produce an empty constraint.
 type family Or (a :: Constraint) (b :: Constraint) :: Constraint where
@@ -248,11 +266,29 @@ escape = escapeURIString isUnreserved
 --
 -- This function will only typecheck if `endpoint` is part of the API `api`
 safeLink
-    :: forall endpoint api. (IsElem endpoint api, HasLink endpoint)
+    :: (IsElem endpoint api, HasLink endpoint)
     => Proxy api      -- ^ The whole API that this endpoint is a part of
     -> Proxy endpoint -- ^ The API endpoint you would like to point to
     -> MkLink endpoint
 safeLink _ endpoint = toLink endpoint (Link mempty mempty)
+
+safeTaggedLink :: (IsElem endpoint api, HasLink endpoint, TagURI api (MkLink endpoint))
+    => Proxy api      -- ^ The whole API that this endpoint is a part of
+    -> Proxy endpoint -- ^ The API endpoint you would like to point to
+    -> URITagged api (MkLink endpoint)
+safeTaggedLink pApi = tagURI pApi . safeLink pApi
+
+class TagURI tag v where
+  type URITagged tag v
+  tagURI :: Proxy tag -> v -> URITagged tag v
+
+instance TagURI tag b => TagURI tag (a -> b) where
+  type URITagged tag (a -> b) = a -> URITagged tag b
+  tagURI _ fn = \a -> tagURI (Proxy :: Proxy tag) (fn a :: b)
+
+instance TagURI tag URI where
+  type URITagged tag URI = TaggedURI tag
+  tagURI _ uri = TaggedURI uri
 
 -- | Construct a toLink for an endpoint.
 class HasLink endpoint where
@@ -369,3 +405,14 @@ instance HasLink (Delete y r) where
 instance HasLink Raw where
     type MkLink Raw = URI
     toLink _ = linkURI
+
+-- * Other predicates
+
+-- | Checks that second argument has the method specified in the first argument
+type family IsMethod method lnk :: Constraint where
+    IsMethod Get (Get x y) = ()
+    IsMethod Post (Post x y) = ()
+    IsMethod Put (Put x y) = ()
+    IsMethod Delete (Delete x y) = ()
+    IsMethod Patch (Patch x y) = ()
+    IsMethod method (a :> b) = IsMethod method b

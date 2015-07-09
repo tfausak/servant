@@ -35,8 +35,10 @@ library
     Servant
     Servant.Server
     Servant.Server.Internal
+    Servant.Server.Internal.Class
     Servant.Server.Internal.Enter
     Servant.Server.Internal.PathInfo
+    Servant.Server.Internal.Redirect
     Servant.Server.Internal.Router
     Servant.Server.Internal.RoutingApplication
     Servant.Server.Internal.ServantErr

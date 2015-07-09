@@ -40,10 +40,12 @@ library
     Servant.API.QueryParam
     Servant.API.MatrixParam
     Servant.API.Raw
+    Servant.API.Redirect
     Servant.API.ReqBody
     Servant.API.ResponseHeaders
     Servant.API.Sub
     Servant.Common.Text
+    Servant.Common.Methods
     Servant.Utils.Links
   build-depends:
       base >=4.7 && <5

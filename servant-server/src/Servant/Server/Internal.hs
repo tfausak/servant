@@ -14,7 +14,9 @@
 
 module Servant.Server.Internal
   ( module Servant.Server.Internal
+  , module Servant.Server.Internal.Class
   , module Servant.Server.Internal.PathInfo
+  , module Servant.Server.Internal.Redirect
   , module Servant.Server.Internal.Router
   , module Servant.Server.Internal.RoutingApplication
   , module Servant.Server.Internal.ServantErr
@@ -51,17 +53,13 @@ import           Servant.API.ResponseHeaders (Headers, getResponse, GetHeaders,
                                               getHeaders)
 import           Servant.Common.Text         (FromText, fromText)
 
+import           Servant.Server.Internal.Class
 import           Servant.Server.Internal.PathInfo
+import           Servant.Server.Internal.Redirect
 import           Servant.Server.Internal.Router
 import           Servant.Server.Internal.RoutingApplication
 import           Servant.Server.Internal.ServantErr
 
-class HasServer layout where
-  type ServerT layout (m :: * -> *) :: *
-
-  route :: Proxy layout -> IO (RouteResult (Server layout)) -> Router
-
-type Server layout = ServerT layout (EitherT ServantErr IO)
 
 -- * Instances
 
@@ -642,9 +640,9 @@ instance (KnownSymbol sym, HasServer sublayout)
                     Just Nothing  -> True  -- param is there, with no value
                     Just (Just v) -> examine v -- param with a value
                     Nothing       -> False -- param not in the query string
-  
+
               route (Proxy :: Proxy sublayout) (feedTo subserver param)
-  
+
       _ -> route (Proxy :: Proxy sublayout) (feedTo subserver False)
 
     where paramname = cs $ symbolVal (Proxy :: Proxy sym)
