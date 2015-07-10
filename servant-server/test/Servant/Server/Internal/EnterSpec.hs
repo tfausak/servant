@@ -15,7 +15,7 @@ import           Test.Hspec.Wai                (get, matchStatus, post,
                                                 shouldRespondWith, with)
 
 spec :: Spec
-spec = describe "module Servant.Server.Enter" $ do
+spec = describe "module Servant.Server.Internal.Enter" $ do
     enterSpec
 
 type ReaderAPI = "int" :> Get '[JSON] Int

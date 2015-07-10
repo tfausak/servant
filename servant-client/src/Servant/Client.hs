@@ -40,6 +40,8 @@ import           Servant.API
 import           Servant.Common.BaseUrl
 import           Servant.Common.Req
 
+import           Servant.Internal.Class
+
 -- * Accessing APIs as a Client
 
 -- | 'client' allows you to produce operations to query an API from a client.
@@ -57,14 +59,6 @@ import           Servant.Common.Req
 client :: HasClient layout => Proxy layout -> BaseUrl -> Client layout
 client p baseurl = clientWithRoute p defReq baseurl
 
--- | This class lets us define how each API combinator
--- influences the creation of an HTTP request. It's mostly
--- an internal class, you can just use 'client'.
-class HasClient layout where
-  type Client layout :: *
-  clientWithRoute :: Proxy layout -> Req -> BaseUrl -> Client layout
-
-{-type Client layout = Client layout-}
 
 -- | A client querying function for @a ':<|>' b@ will actually hand you
 --   one function for querying @a@ and another one for querying @b@,
@@ -668,4 +662,3 @@ instance (KnownSymbol path, HasClient sublayout) => HasClient (path :> sublayout
                      baseurl
 
     where p = symbolVal (Proxy :: Proxy path)
-

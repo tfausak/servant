@@ -11,12 +11,12 @@
 #if !MIN_VERSION_base(4,8,0)
 {-# LANGUAGE OverlappingInstances #-}
 #endif
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Servant.Server.Internal
   ( module Servant.Server.Internal
   , module Servant.Server.Internal.Class
   , module Servant.Server.Internal.PathInfo
-  , module Servant.Server.Internal.Redirect
   , module Servant.Server.Internal.Router
   , module Servant.Server.Internal.RoutingApplication
   , module Servant.Server.Internal.ServantErr
@@ -55,7 +55,7 @@ import           Servant.Common.Text         (FromText, fromText)
 
 import           Servant.Server.Internal.Class
 import           Servant.Server.Internal.PathInfo
-import           Servant.Server.Internal.Redirect
+import           Servant.Server.Internal.Redirect ()
 import           Servant.Server.Internal.Router
 import           Servant.Server.Internal.RoutingApplication
 import           Servant.Server.Internal.ServantErr

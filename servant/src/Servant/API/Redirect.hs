@@ -66,7 +66,8 @@ data TemporaryRedirect method link api
 data PermanentRedirect method link api
   deriving (Generic, Typeable)
 
-data Redirect code method link api = Redirect
+
+data Redirect code method link api
   deriving (Generic, Typeable)
 
 
