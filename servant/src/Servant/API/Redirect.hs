@@ -34,14 +34,14 @@ import           Network.HTTP.Types.Status (status301, status302, status303,
 
 
 -- | Redirect with @301 - Moved Permanently@.
-newtype MovedPermanently method api = MovedPermanently ( Redirect 301 method api )
+data MovedPermanently method link api
   deriving (Generic, Typeable)
 
 -- | Redirect with @302 - Found@
 -- If compatibility with HTTP/1.0 is not required, prefer 'SeeOther' or
 -- 'TemporaryRedirect' over 302, since the treatment given to @Found@ by web
 -- browsers is inconsistent.
-newtype Found method api = Found ( Redirect 302 method api )
+data Found method link api
   deriving (Generic, Typeable)
 
 -- | Redirect with @303 - See Other@
@@ -49,29 +49,29 @@ newtype Found method api = Found ( Redirect 302 method api )
 -- more info.
 -- The method of the redirect URL should be @GET@. This is enforced by the type
 -- system.
-newtype SeeOther method api = SeeOther ( Redirect 303 method api )
+data SeeOther method link api
   deriving (Generic, Typeable)
 
 -- | Redirect with @307 - Temporary Redirect@
 -- See <https://tools.ietf.org/html/rfc7231#section-6.4.7 RFC7231 6.4.7> for
 -- more info. The method of the URL and the redirect URL should be the same.
 -- This is enforced by the type system.
-newtype TemporaryRedirect method api = TemporaryRedirect ( Redirect 307 method api )
+data TemporaryRedirect method link api
   deriving (Generic, Typeable)
 
 -- | Redirect with @308 - Permanent Redirect@
 -- See <https://tools.ietf.org/html/rfc7238 RFC7238> for more info. The method
 -- of the URL and the redirect URL should be the same. This is enforced by the
 -- type system.
-newtype PermanentRedirect method api = PermanentRedirect ( Redirect 308 method api )
+data PermanentRedirect method link api
   deriving (Generic, Typeable)
 
-data Redirect method code api = Redirect
+data Redirect code method link api = Redirect
   deriving (Generic, Typeable)
 
 
-redirectStatusCode :: forall code m a. KnownNat code => Redirect code m a -> Status
-redirectStatusCode _ = case natVal (Proxy :: Proxy code) of
+redirectStatusCode :: KnownNat code => Proxy code -> Status
+redirectStatusCode p = case natVal p of
   301 -> status301
   302 -> status302
   303 -> status303

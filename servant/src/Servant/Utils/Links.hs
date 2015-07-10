@@ -283,21 +283,11 @@ safeTaggedLink pApi = tagURI pApi . safeLink pApi
 type family RedirectConstraints code m lnk :: Constraint where
   RedirectConstraints 301 m lnk = ()
   RedirectConstraints 302 m lnk = ()
-  RedirectConstraints 303 m lnk = IsMethod Get lnk
-  RedirectConstraints 307 m lnk = IsMethod m lnk
-  RedirectConstraints 308 m lnk = IsMethod m lnk
+  RedirectConstraints 303 m lnk = IsMethod lnk ~ Get
+  RedirectConstraints 307 m lnk = IsMethod lnk ~ m
+  RedirectConstraints 308 m lnk = IsMethod lnk ~ m
 
 {-data T a b c = T-}
-
-{-safeRedirect :: (RedirectConstraints code method endpoint, IsMethod method endpoint,-}
-        {-IsElem endpoint api, HasLink endpoint, TagURI api (MkLink endpoint))-}
-    {-=> Proxy api-}
-    {--> Proxy method-}
-    {--> Proxy code-}
-    {--> Proxy endpoint-}
-    {--> URITagged (T api method code) (MkLink endpoint)-}
-{-safeRedirect pApi _ _ = tagURI p . safeLink pApi-}
-  {-where p = Proxy :: Proxy (T api method code)-}
 
 class TagURI tag v where
   type URITagged tag v
@@ -429,11 +419,10 @@ instance HasLink Raw where
 
 -- * Other predicates
 
--- | Checks that second argument has the method specified in the first argument
-type family IsMethod method lnk :: Constraint where
-    IsMethod Get (Get x y) = ()
-    IsMethod Post (Post x y) = ()
-    IsMethod Put (Put x y) = ()
-    IsMethod Delete (Delete x y) = ()
-    IsMethod Patch (Patch x y) = ()
-    IsMethod method (a :> b) = IsMethod method b
+type family IsMethod lnk where
+    IsMethod (Get x y) = Get
+    IsMethod (Post x y) = Post
+    IsMethod (Put x y) = Put
+    IsMethod (Delete x y) = Delete
+    IsMethod (Patch x y) = Patch
+    IsMethod (a :> b) = IsMethod b

@@ -1,7 +1,6 @@
 {-# LANGUAGE PolyKinds #-}
 module Servant.Common.Methods where
 
-import           Data.Proxy                (Proxy)
 import           Network.HTTP.Types.Method
 import           Servant.API.Get
 import           Servant.API.Delete
@@ -10,7 +9,7 @@ import           Servant.API.Put
 import           Servant.API.Patch
 
 class KnownMethod c where
-  methodOf :: Proxy c -> Method
+  methodOf :: proxy c -> Method
 
 instance KnownMethod Delete where
   methodOf _ = methodDelete
