@@ -34,38 +34,32 @@ import           Network.HTTP.Types.Status (status301, status302, status303,
 
 
 -- | Redirect with @301 - Moved Permanently@.
-data MovedPermanently method link api
-  deriving (Generic, Typeable)
+type MovedPermanently = Redirect 301
 
 -- | Redirect with @302 - Found@
 -- If compatibility with HTTP/1.0 is not required, prefer 'SeeOther' or
 -- 'TemporaryRedirect' over 302, since the treatment given to @Found@ by web
 -- browsers is inconsistent.
-data Found method link api
-  deriving (Generic, Typeable)
+type Found = Redirect 302
 
 -- | Redirect with @303 - See Other@
 -- See <https://tools.ietf.org/html/rfc7231#section-6.4.4 RFC7231 6.4.4> for
 -- more info.
 -- The method of the redirect URL should be @GET@. This is enforced by the type
 -- system.
-data SeeOther method link api
-  deriving (Generic, Typeable)
+type SeeOther = Redirect 303
 
 -- | Redirect with @307 - Temporary Redirect@
 -- See <https://tools.ietf.org/html/rfc7231#section-6.4.7 RFC7231 6.4.7> for
 -- more info. The method of the URL and the redirect URL should be the same.
 -- This is enforced by the type system.
-data TemporaryRedirect method link api
-  deriving (Generic, Typeable)
+type TemporaryRedirect = Redirect 307
 
 -- | Redirect with @308 - Permanent Redirect@
 -- See <https://tools.ietf.org/html/rfc7238 RFC7238> for more info. The method
 -- of the URL and the redirect URL should be the same. This is enforced by the
 -- type system.
-data PermanentRedirect method link api
-  deriving (Generic, Typeable)
-
+type PermanentRedirect = Redirect 308
 
 data Redirect code method link api
   deriving (Generic, Typeable)

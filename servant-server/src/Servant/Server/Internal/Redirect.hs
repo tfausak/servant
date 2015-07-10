@@ -60,35 +60,35 @@ instance (KnownNat code, KnownMethod (IsMethod link), HasLink link, IsElem link 
 -- >>> server = (return . lookupBook) :<|> (\x -> return $ \fn -> fn x)
                                              --
 -- $cycle
-instance HasServer (Redirect 301 method link api)
-  => HasServer (MovedPermanently method link api) where
-  type ServerT (MovedPermanently method link api) m
-    = ServerT (Redirect 301 method link api) m
-  route _ = route (Proxy :: Proxy (Redirect 301 method link api))
+{-instance HasServer (Redirect 301 method link api)-}
+  {-=> HasServer (MovedPermanently method link api) where-}
+  {-type ServerT (MovedPermanently method link api) m-}
+    {-= ServerT (Redirect 301 method link api) m-}
+  {-route _ = route (Proxy :: Proxy (Redirect 301 method link api))-}
 
-instance HasServer (Redirect 302 method link api)
-  => HasServer (Found method link api) where
-  type ServerT (Found method link api) m
-    = ServerT (Redirect 302 method link api) m
-  route _ = route (Proxy :: Proxy (Redirect 302 method link api))
+{-instance HasServer (Redirect 302 method link api)-}
+  {-=> HasServer (Found method link api) where-}
+  {-type ServerT (Found method link api) m-}
+    {-= ServerT (Redirect 302 method link api) m-}
+  {-route _ = route (Proxy :: Proxy (Redirect 302 method link api))-}
 
-instance HasServer (Redirect 303 method link api)
-  => HasServer (SeeOther method link api) where
-  type ServerT (SeeOther method link api) m
-    = ServerT (Redirect 303 method link api) m
-  route _ = route (Proxy :: Proxy (Redirect 303 method link api))
+{-instance HasServer (Redirect 303 method link api)-}
+  {-=> HasServer (SeeOther method link api) where-}
+  {-type ServerT (SeeOther method link api) m-}
+    {-= ServerT (Redirect 303 method link api) m-}
+  {-route _ = route (Proxy :: Proxy (Redirect 303 method link api))-}
 
-instance HasServer (Redirect 307 method link api)
-  => HasServer (TemporaryRedirect method link api) where
-  type ServerT (TemporaryRedirect method link api) m
-    = ServerT (Redirect 307 method link api) m
-  route _ = route (Proxy :: Proxy (Redirect 307 method link api))
+{-instance HasServer (Redirect 307 method link api)-}
+  {-=> HasServer (TemporaryRedirect method link api) where-}
+  {-type ServerT (TemporaryRedirect method link api) m-}
+    {-= ServerT (Redirect 307 method link api) m-}
+  {-route _ = route (Proxy :: Proxy (Redirect 307 method link api))-}
 
-instance HasServer (Redirect 308 method link api)
-  => HasServer (PermanentRedirect method link api) where
-  type ServerT (PermanentRedirect method link api) m
-    = ServerT (Redirect 308 method link api) m
-  route _ = route (Proxy :: Proxy (Redirect 308 method link api))
+{-instance HasServer (Redirect 308 method link api)-}
+  {-=> HasServer (PermanentRedirect method link api) where-}
+  {-type ServerT (PermanentRedirect method link api) m-}
+    {-= ServerT (Redirect 308 method link api) m-}
+  {-route _ = route (Proxy :: Proxy (Redirect 308 method link api))-}
 
 -- $cycle
 -- Note that types are not allowed to form cycles, so you cannot refer to the
