@@ -81,7 +81,7 @@ import           Servant.API.QueryParam      (QueryFlag, QueryParam,
 import           Servant.API.Raw             (Raw)
 import           Servant.API.Redirect        (Found, MovedPermanently,
                                               PermanentRedirect,
-                                              RedirectConstraints, SeeOther,
+                                              SeeOther,
                                               TemporaryRedirect,
                                               redirectStatusCode)
 import           Servant.API.ReqBody         (ReqBody)

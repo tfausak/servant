@@ -27,14 +27,10 @@ module Servant.API.Redirect where
 
 import           Data.Proxy                (Proxy(..))
 import           Data.Typeable             (Typeable)
-import           GHC.Exts                  (Constraint)
 import           GHC.Generics              (Generic)
 import           GHC.TypeLits              (KnownNat, natVal)
 import           Network.HTTP.Types.Status (status301, status302, status303,
                                             status307, mkStatus, Status(..))
-
-import           Servant.API.Get
-import           Servant.Utils.Links       (IsMethod)
 
 
 -- | Redirect with @301 - Moved Permanently@.
@@ -70,15 +66,9 @@ newtype TemporaryRedirect method api = TemporaryRedirect ( Redirect 307 method a
 newtype PermanentRedirect method api = PermanentRedirect ( Redirect 308 method api )
   deriving (Generic, Typeable)
 
-data Redirect method code api
+data Redirect method code api = Redirect
   deriving (Generic, Typeable)
 
-type family RedirectConstraints redir :: Constraint where
-   RedirectConstraints (Redirect 301 c lnk) = ()
-   RedirectConstraints (Redirect 302 c lnk) = ()
-   RedirectConstraints (Redirect 303 c lnk) = IsMethod Get lnk
-   RedirectConstraints (Redirect 307 c lnk) = IsMethod c lnk
-   RedirectConstraints (Redirect 308 c lnk) = IsMethod c lnk
 
 redirectStatusCode :: forall code m a. KnownNat code => Redirect code m a -> Status
 redirectStatusCode _ = case natVal (Proxy :: Proxy code) of

@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE RankNTypes           #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -18,7 +19,8 @@ import           Network.Wai                                (Application,
                                                              requestMethod,
                                                              responseLBS)
 import           Servant.API
-import           Servant.API.Redirect                       (Redirect)
+import           Servant.API.Redirect                       (Redirect(..))
+import           Servant.Utils.Links
 
 import           Servant.Server.Internal.Class              (HasServer (..))
 import           Servant.Server.Internal.PathInfo
@@ -31,15 +33,15 @@ instance ( KnownMethod method
          ) => HasServer (Redirect code method api) where
 
   type ServerT (Redirect code method api) m
-    = RedirectConstraints (Redirect code method api) => m (TaggedURI api)
+    = (Monad m) => m Int
 
   route _ getLink = LeafRouter undefined --route'
-    where
+    {-where-}
       {-route' req respond-}
         {-| null (parsePathInfo req) && requestMethod req == methodOf pc =-}
-            {-runAction getLink respond $ \ cont -> do-}
-              {-let link = cont $ safeLink papi plnk-}
-              {-succeedWith $ responseLBS seeOther303 [("Location", fromString ("/" ++ show link))] ""-}
+            {-runAction getLink respond $ \link -> do-}
+              {-succeedWith $ responseLBS (redirectStatusCode red)-}
+                            {-[("Location", fromString ("/" ++ show link))] ""-}
 
         {-| null (parsePathInfo req) && requestMethod req /= methodOf pc =-}
             {-respond $ failWith WrongMethod-}
@@ -48,3 +50,4 @@ instance ( KnownMethod method
         {-where pc   = Proxy :: Proxy c-}
               {-plnk = Proxy :: Proxy lnk-}
               {-papi = Proxy :: Proxy api-}
+              {-red  = Redirect :: Redirect code method api-}

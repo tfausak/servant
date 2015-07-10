@@ -148,6 +148,8 @@ data Link = Link
 -- use 'safeTaggedLink'
 newtype TaggedURI a = TaggedURI { unTagURI :: URI }
 
+instance Show (TaggedURI a) where
+  show = show . unTagURI
 
 -- | Unsafely tag a URI with an API. Only use this if you have an
 -- unresonable penchant for palindromic status codes.
@@ -273,10 +275,29 @@ safeLink
 safeLink _ endpoint = toLink endpoint (Link mempty mempty)
 
 safeTaggedLink :: (IsElem endpoint api, HasLink endpoint, TagURI api (MkLink endpoint))
-    => Proxy api      -- ^ The whole API that this endpoint is a part of
-    -> Proxy endpoint -- ^ The API endpoint you would like to point to
+    => Proxy api
+    -> Proxy endpoint
     -> URITagged api (MkLink endpoint)
 safeTaggedLink pApi = tagURI pApi . safeLink pApi
+
+type family RedirectConstraints code m lnk :: Constraint where
+  RedirectConstraints 301 m lnk = ()
+  RedirectConstraints 302 m lnk = ()
+  RedirectConstraints 303 m lnk = IsMethod Get lnk
+  RedirectConstraints 307 m lnk = IsMethod m lnk
+  RedirectConstraints 308 m lnk = IsMethod m lnk
+
+{-data T a b c = T-}
+
+{-safeRedirect :: (RedirectConstraints code method endpoint, IsMethod method endpoint,-}
+        {-IsElem endpoint api, HasLink endpoint, TagURI api (MkLink endpoint))-}
+    {-=> Proxy api-}
+    {--> Proxy method-}
+    {--> Proxy code-}
+    {--> Proxy endpoint-}
+    {--> URITagged (T api method code) (MkLink endpoint)-}
+{-safeRedirect pApi _ _ = tagURI p . safeLink pApi-}
+  {-where p = Proxy :: Proxy (T api method code)-}
 
 class TagURI tag v where
   type URITagged tag v
