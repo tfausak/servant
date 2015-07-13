@@ -11,8 +11,6 @@ main = do
     files <- find always (extension ==? ".hs") "src"
     cabalMacrosFile <- getCabalMacrosFile
     doctest $ [ "-isrc"
-              , "-optP-include"
-              , "-optP" ++ cabalMacrosFile
               , "-XOverloadedStrings"
               , "-XFlexibleInstances"
               , "-XMultiParamTypeClasses"

@@ -10,21 +10,11 @@ before_install:
  - travis_retry sudo apt-get install cabal-install-$CABALVER ghc-$GHCVER
  - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
  - travis_retry cabal update
+ - cabal install stack
 
 install:
  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
  - cabal --version
 
 script:
-  - ./scripts/test-all.sh
-
-notifications:
-  irc:
-    channels:
-      - "irc.freenode.org#servant"
-    template:
-      - "%{repository}#%{build_number} - %{commit} on %{branch} by %{author}: %{message}"
-      - "Build details: %{build_url} - Change view: %{compare_url}"
-    skip_join: true
-    on_success: change
-    on_failure: always
+  - stack build && stack test
