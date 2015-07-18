@@ -2,7 +2,6 @@ language: haskell
 
 env:
   - CABALVER=1.18 GHCVER=7.8.4
-  - CABALVER=1.22 GHCVER=7.10.1
 
 before_install:
  - travis_retry sudo add-apt-repository -y ppa:hvr/ghc
@@ -17,4 +16,5 @@ install:
  - cabal --version
 
 script:
-  - stack build && stack test
+  - stack build
+  - stack test
