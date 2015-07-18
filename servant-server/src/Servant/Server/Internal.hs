@@ -36,7 +36,7 @@ import           Data.Typeable
 import           GHC.TypeLits                (KnownSymbol, symbolVal)
 import           Network.HTTP.Types          hiding (Header, ResponseHeaders)
 import           Network.Socket              (SockAddr)
-import           Network.Wai                 (Application, lazyRequestBody,
+import           Network.Wai                 (Application, Request, lazyRequestBody,
                                               rawQueryString, requestHeaders,
                                               requestMethod, responseLBS, remoteHost,
                                               isSecure, vault, httpVersion)
@@ -61,7 +61,7 @@ import           Servant.Server.Internal.ServantErr
 class HasServer layout where
   type ServerT layout (m :: * -> *) :: *
 
-  route :: Proxy layout -> IO (RouteResult (Server layout)) -> Router
+  route :: Proxy layout -> IO (RouteResult (Server layout)) -> Router Request RoutingApplication
 
 type Server layout = ServerT layout (EitherT ServantErr IO)
 
@@ -125,7 +125,7 @@ instance (KnownSymbol capture, FromText a, HasServer sublayout)
 methodRouter :: (AllCTRender ctypes a)
              => Method -> Proxy ctypes -> Status
              -> IO (RouteResult (EitherT ServantErr IO a))
-             -> Router
+             -> Router Request RoutingApplication
 methodRouter method proxy status action = LeafRouter route'
   where
     route' request respond
@@ -143,7 +143,7 @@ methodRouter method proxy status action = LeafRouter route'
 methodRouterHeaders :: (GetHeaders (Headers h v), AllCTRender ctypes v)
                     => Method -> Proxy ctypes -> Status
                     -> IO (RouteResult (EitherT ServantErr IO (Headers h v)))
-                    -> Router
+                    -> Router Request RoutingApplication
 methodRouterHeaders method proxy status action = LeafRouter route'
   where
     route' request respond
@@ -161,7 +161,7 @@ methodRouterHeaders method proxy status action = LeafRouter route'
 
 methodRouterEmpty :: Method
                   -> IO (RouteResult (EitherT ServantErr IO ()))
-                  -> Router
+                  -> Router Request RoutingApplication
 methodRouterEmpty method action = LeafRouter route'
   where
     route' request respond
