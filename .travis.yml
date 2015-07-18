@@ -4,12 +4,17 @@ env:
   - CABALVER=1.18 GHCVER=7.8.4
 
 before_install:
+ # ghc
  - travis_retry sudo add-apt-repository -y ppa:hvr/ghc
  - travis_retry sudo apt-get update
  - travis_retry sudo apt-get install cabal-install-$CABALVER ghc-$GHCVER
  - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
  - travis_retry cabal update
- - cabal install stack
+ # stack
+ - mkdir -p ~/.local/bin
+ - export PATH=~/.local/bin:$PATH
+ - travis_retry curl -L https://github.com/commercialhaskell/stack/releases/download/v0.1.2.0/stack-0.1.2.0-x86_64-linux.gz | gunzip > ~/.local/bin/stack
+ - chmod a+x ~/.local/bin/stack
 
 install:
  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
