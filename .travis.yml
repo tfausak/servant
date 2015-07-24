@@ -13,7 +13,7 @@ cache:
 
 before_install:
  # ghc
- - export PATH=/opt/ghc/ghc-7.10.1/bin:$PATH
+ - export PATH=/opt/ghc/7.10.1/bin:$PATH
  # stack
  - mkdir -p ~/.local/bin
  - export PATH=~/.local/bin:$PATH
@@ -22,7 +22,6 @@ before_install:
 
 install:
  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
- - cabal --version
 
 script:
   - stack build
