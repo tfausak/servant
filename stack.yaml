@@ -6,10 +6,10 @@ packages:
   - servant-docs/
   - servant-blaze/
   - servant-client/
-  - servant-jquery/
+  - servant-js/
   - servant-lucid/
   - servant/
   - servant-server/
 extra-deps:
   - doctest-0.10.1
-resolver: lts-2.17
+resolver: nightly-2015-07-24
