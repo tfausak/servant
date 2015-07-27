@@ -18,8 +18,10 @@ import           Control.Applicative         ((<$>))
 import qualified Control.Arrow              as Arrow
 import           Control.Concurrent
 import           Control.Exception
+import           Control.Monad (when)
 import           Control.Monad.Trans.Either
 import           Data.Aeson
+import           Data.ByteString            (unpack)
 import           Data.ByteString.Lazy       (ByteString)
 import           Data.Char
 import           Data.Foldable              (forM_)
@@ -97,8 +99,13 @@ type Api =
 api :: Proxy Api
 api = Proxy
 
+logAllMiddleware :: Application -> Application
+logAllMiddleware app req respond = do
+    print req
+    app req respond
+
 server :: Application
-server = serve api (
+server = logAllMiddleware $ serve api (
        return alice
   :<|> return ()
   :<|> (\ name -> return $ Person name 0)
@@ -250,7 +257,7 @@ spec = withServer $ \ baseUrl -> do
 
     modifyMaxSuccess (const 20) $ do
       it "works for a combination of Capture, QueryParam, QueryFlag and ReqBody" $
-        property $ forAllShrink pathGen shrink $ \(NonEmpty cap) num flag body ->
+        property $ noShrinking $ forAllShrink pathGen shrink $ \(NonEmpty cap) num flag body ->
           ioProperty $ do
             result <- Arrow.left show <$> runEitherT (getMultiple cap num flag body)
             return $

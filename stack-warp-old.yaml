@@ -12,5 +12,5 @@ packages:
 - servant-mock/
 - servant-server/
 extra-deps:
-- warp-3.1.0
+- warp-3.0.13.1
 resolver: nightly-2015-07-24

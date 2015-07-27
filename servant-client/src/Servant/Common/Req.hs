@@ -33,6 +33,8 @@ import System.IO.Unsafe
 
 import qualified Network.HTTP.Client as Client
 
+import Debug.Trace
+
 data ServantError
   = FailureResponse
     { responseStatus            :: Status
@@ -65,7 +67,7 @@ data Req = Req
   , reqBody   :: Maybe (ByteString, MediaType)
   , reqAccept :: [MediaType]
   , headers   :: [(String, Text)]
-  }
+  } deriving (Show, Eq)
 
 defReq :: Req
 defReq = Req "" [] Nothing [] []
@@ -169,6 +171,7 @@ performRequest reqMethod req isWantedStatus reqHost = do
                    Nothing -> left $ InvalidContentTypeHeader (cs t) body
                    Just t' -> pure t'
       unless (isWantedStatus status_code) $
+        traceShow (response) $ traceShow req $
         left $ FailureResponse status ct body
       return (status_code, body, ct, hrds, response)
 
