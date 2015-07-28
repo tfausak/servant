@@ -1,0 +1,77 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<dfxml xmloutputversion='1.0'>
+  <metadata 
+  xmlns='http://afflib.org/tcpflow/' 
+  xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' 
+  xmlns:dc='http://purl.org/dc/elements/1.1/'>
+    <dc:type>Feature Extraction</dc:type>
+  </metadata>
+  <creator version='1.0'>
+    <program>TCPFLOW</program>
+    <version>1.4.4</version>
+    <build_environment>
+      <compiler>4.8.4 (4.8.4)</compiler>
+      <CPPFLAGS>-pthread -I/usr/local/include  -DUTC_OFFSET=+0200 </CPPFLAGS>
+      <CFLAGS>-g   -pthread -g -O3 -MD -D_FORTIFY_SOURCE=2 -Wpointer-arith -Wmissing-declarations -Wmissing-prototypes -Wshadow -Wwrite-strings -Wcast-align -Waggregate-return -Wbad-function-cast -Wcast-qual -Wundef -Wredundant-decls -Wdisabled-optimization -Wfloat-equal -Wmultichar -Wc++-compat -Wmissing-noreturn -Wall -Wstrict-prototypes</CFLAGS>
+      <CXXFLAGS>-g -pthread -g -O3 -std=c++11 -Wall -MD -D_FORTIFY_SOURCE=2 -Wpointer-arith -Wshadow -Wwrite-strings -Wcast-align -Wredundant-decls -Wdisabled-optimization -Wfloat-equal -Wmultichar -Wmissing-noreturn -Woverloaded-virtual -Wsign-promo -funit-at-a-time -Wstrict-null-sentinel -Weffc++ </CXXFLAGS>
+      <LDFLAGS>-L/usr/local/lib </LDFLAGS>
+      <LIBS>-lpcap -lcairo -lfontconfig -lfreetype -lpixman-1 -lexpat  -lssl -lcrypto -lz -lsqlite3 -lssl -lcrypto </LIBS>
+      <compilation_date>2015-07-28T20:24:25</compilation_date>
+      <library name="boost" version="105400"/>
+      <library name="sqlite" version="3.8.2" source_id="2013-12-06 14:53:30 27392118af4c38c5203a04b8013e1afdb1cebd0d"/>
+    </build_environment>
+    <execution_environment>
+      <os_sysname>Linux</os_sysname>
+      <os_release>3.13.0-57-generic</os_release>
+      <os_version>#95-Ubuntu SMP Fri Jun 19 09:28:15 UTC 2015</os_version>
+      <host>Tal</host>
+      <arch>x86_64</arch>
+      <command_line>tcpflow -i any</command_line>
+      <uid>0</uid>
+      <start_time>2015-07-28T19:16:00Z</start_time>
+    </execution_environment>
+  </creator>
+  <configuration>
+  </configuration>
+  <tdelta>0</tdelta>
+  <configuration>
+    <fileobject>
+      <filename>127.000.000.001.36117-127.000.000.001.04452</filename>
+      <filesize>156</filesize>
+      <tcpflow startime='2015-07-28T21:16:02.666843Z' endtime='2015-07-28T21:16:07.669820Z' src_ipn='127.0.0.1' dst_ipn='127.0.0.1' mac_daddr='00:00:03:04:00:06' packets='5' srcport='36117' dstport='4452' family='2' />
+    </fileobject>
+    <fileobject>
+      <filename>127.000.000.001.04452-127.000.000.001.36117</filename>
+      <filesize>617</filesize>
+      <tcpflow startime='2015-07-28T21:16:02.666863Z' endtime='2015-07-28T21:16:07.670079Z' src_ipn='127.0.0.1' dst_ipn='127.0.0.1' mac_daddr='00:00:03:04:00:06' packets='4' srcport='4452' dstport='36117' family='2' />
+    </fileobject>
+    <fileobject>
+      <filename>127.000.000.001.36118-127.000.000.001.04452</filename>
+      <filesize>156</filesize>
+      <tcpflow startime='2015-07-28T21:16:07.670997Z' endtime='2015-07-28T21:16:12.673327Z' src_ipn='127.0.0.1' dst_ipn='127.0.0.1' mac_daddr='00:00:03:04:00:06' packets='5' srcport='36118' dstport='4452' family='2' />
+    </fileobject>
+    <fileobject>
+      <filename>127.000.000.001.04452-127.000.000.001.36118</filename>
+      <filesize>617</filesize>
+      <tcpflow startime='2015-07-28T21:16:07.671021Z' endtime='2015-07-28T21:16:12.673454Z' src_ipn='127.0.0.1' dst_ipn='127.0.0.1' mac_daddr='00:00:03:04:00:06' packets='4' srcport='4452' dstport='36118' family='2' />
+    </fileobject>
+    <fileobject>
+      <filename>127.000.000.001.36119-127.000.000.001.04452</filename>
+      <filesize>156</filesize>
+      <tcpflow startime='2015-07-28T21:16:12.673717Z' endtime='2015-07-28T21:16:17.674986Z' src_ipn='127.0.0.1' dst_ipn='127.0.0.1' mac_daddr='00:00:03:04:00:06' packets='5' srcport='36119' dstport='4452' family='2' />
+    </fileobject>
+    <fileobject>
+      <filename>127.000.000.001.04452-127.000.000.001.36119</filename>
+      <filesize>617</filesize>
+      <tcpflow startime='2015-07-28T21:16:12.673732Z' endtime='2015-07-28T21:16:17.675102Z' src_ipn='127.0.0.1' dst_ipn='127.0.0.1' mac_daddr='00:00:03:04:00:06' packets='4' srcport='4452' dstport='36119' family='2' />
+    </fileobject>
+    <fileobject>
+      <filename>127.000.000.001.45586-127.000.000.001.48385</filename>
+      <filesize>32459</filesize>
+      <tcpflow startime='2015-07-28T21:16:19.317616Z' endtime='2015-07-28T21:16:19.335430Z' src_ipn='127.0.0.1' dst_ipn='127.0.0.1' mac_daddr='00:00:03:04:00:06' packets='48' srcport='45586' dstport='48385' family='2' />
+    </fileobject>
+    <fileobject>
+      <filename>127.000.000.001.48385-127.000.000.001.45586</filename>
+      <filesize>34849</filesize>
+      <tcpflow startime='2015-07-28T21:16:19.317598Z' endtime='2015-07-28T21:16:19.336265Z' src_ipn='127.0.0.1' dst_ipn='127.0.0.1' mac_daddr='00:00:03:04:00:06' packets='49' srcport='48385' dstport='45586' family='2' />
+    </fileobject>

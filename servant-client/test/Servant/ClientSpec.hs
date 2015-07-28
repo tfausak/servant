@@ -41,6 +41,7 @@ import           Test.Hspec.QuickCheck
 import           Test.HUnit
 import           Test.QuickCheck
 
+import Control.Concurrent
 import           Servant.API
 import           Servant.Client
 import           Servant.Server
@@ -256,8 +257,9 @@ spec = withServer $ \ baseUrl -> do
         Right val -> getHeaders val `shouldBe` [("X-Example1", "1729"), ("X-Example2", "eg2")]
 
     it "works for a combination of Capture, QueryParam, QueryFlag and ReqBody" $
-      property $  \num flag body ->
+      property $ noShrinking $ \num flag body ->
         ioProperty $ do
+          threadDelay 1000000000
           let b = [("body", body)]
           result <- Arrow.left show <$> runEitherT (getMultiple "hi" num flag b)
           return $
