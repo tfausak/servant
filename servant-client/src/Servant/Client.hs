@@ -7,6 +7,9 @@
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeOperators        #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 #if !MIN_VERSION_base(4,8,0)
 {-# LANGUAGE OverlappingInstances #-}
@@ -39,6 +42,29 @@ import qualified Network.HTTP.Types.Header  as HTTP
 import           Servant.API
 import           Servant.Common.BaseUrl
 import           Servant.Common.Req
+
+data S a
+class PickNth val n res | val n -> res where
+   pickNth :: Proxy val -> Proxy n -> Proxy res
+
+instance PickNth (a :<|> b) 0 a where
+   pickNth _ _ = Proxy
+instance (PickNth b n c) => PickNth (a :<|> b) (S n) c where
+  pickNth _ _ = Proxy
+
+-- This just picks the nth client function, and allows you to choose url
+clientNth :: (PickNth layout n res, HasClient res) => Proxy n -> Proxy layout -> BaseUrl -> Client res
+clientNth _ = client (Proxy :: Proxy res)
+
+class Unfolding val n res | val n -> res where
+   unfolding :: Proxy n -> Proxy val -> res
+
+-- There should be a constraint to make sure 'val' doesn't have deeper nesting
+instance Unfolding val 1 (BaseUrl -> Client val) where
+   unfolding = clientNth
+
+instance (PickNth val n h, Unfolding val n res) => Unfolding val (S n) (h :<|> res) where
+   unfolding pn pval = clientNth pn pval :<|> unfolding (Proxy :: Proxy (S n)) pval
 
 -- * Accessing APIs as a Client
 
