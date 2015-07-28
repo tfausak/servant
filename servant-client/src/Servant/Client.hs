@@ -40,6 +40,39 @@ import           Servant.API
 import           Servant.Common.BaseUrl
 import           Servant.Common.Req
 
+type family Canonicalize api :: * where
+  -- requires UndecidableInstances
+  Canonicalize (a :> (b :<|> c)) = ((a :> Canonicalize b)  :<|>  (a :> Canonicalize c))
+  Canonicalize (a :> b)          = Redex b (Canonicalize b) a
+  Canonicalize (a :<|> b)        = Canonicalize a :<|> Canonicalize b
+  Canonicalize a                 = a
+
+type family Redex a b c :: * where
+  Redex a a first = Canonicalize first :> a
+  Redex a b first = Canonicalize (first :> b)
+
+canonicalize :: Canonicalize layout ~ t => Proxy layout -> Proxy t
+canonicalize Proxy = Proxy
+
+class HasClient api => ReifyClients api where
+  type family Clients api :: * -- unfortunately...
+  reifyClients :: Proxy api -> Clients api
+
+instance (HasClient a, ReifyClients b) => ReifyClients (a :<|> b) where
+  type Clients (a :<|> b) = (BaseUrl -> Client a) :<|> Clients b
+  reifyClients _ = client (Proxy :: Proxy a)
+              :<|> reifyClients (Proxy :: Proxy b)
+
+-- PROBLEM: we obviously can't write that instance...
+{-
+instance HasClient a => ReifyClients a where
+  type Clients a = Client a
+  reifyClients = client
+-}
+
+niceClient :: ReifyClients (Canonicalize api) => Proxy api -> Clients (Canonicalize api)
+niceClient = reifyClients . canonicalize
+
 -- * Accessing APIs as a Client
 
 -- | 'client' allows you to produce operations to query an API from a client.
