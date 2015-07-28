@@ -255,13 +255,13 @@ spec = withServer $ \ baseUrl -> do
         Left e -> assertFailure $ show e
         Right val -> getHeaders val `shouldBe` [("X-Example1", "1729"), ("X-Example2", "eg2")]
 
-    modifyMaxSuccess (const 20) $ do
-      it "works for a combination of Capture, QueryParam, QueryFlag and ReqBody" $
-        property $ noShrinking $ forAllShrink pathGen shrink $ \(NonEmpty cap) num flag body ->
-          ioProperty $ do
-            result <- Arrow.left show <$> runEitherT (getMultiple cap num flag body)
-            return $
-              result === Right (cap, num, flag, body)
+    it "works for a combination of Capture, QueryParam, QueryFlag and ReqBody" $
+      property $  \num flag body ->
+        ioProperty $ do
+          let b = [("body", body)]
+          result <- Arrow.left show <$> runEitherT (getMultiple "hi" num flag b)
+          return $
+            result === Right ("hi", num, flag, b)
 
 
     context "client correctly handles error status codes" $ do
