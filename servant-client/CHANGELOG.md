@@ -1,6 +1,6 @@
 HEAD
 ----
-
+* Update `instance HasClient Raw` for servant Raw changes
 * Support for the `HttpVersion`, `IsSecure`, `RemoteHost` and `Vault` combinators
 
 0.4.1
