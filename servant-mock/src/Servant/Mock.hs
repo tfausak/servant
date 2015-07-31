@@ -61,6 +61,7 @@ import Network.HTTP.Types.Status
 import Network.Wai
 import Servant
 import Servant.API.ContentTypes
+import Servant.Server.Internal (ToRawApplication)
 import Test.QuickCheck.Arbitrary (Arbitrary(..), vector)
 import Test.QuickCheck.Gen (Gen, generate)
 
@@ -164,10 +165,10 @@ instance (Arbitrary a, AllCTRender ctypes a) => HasMock (Post ctypes a) where
 instance (Arbitrary a, AllCTRender ctypes a) => HasMock (Put ctypes a) where
   mock _ = mockArbitrary
 
-instance HasMock Raw where
-  mock _ = \req respond -> do
+instance HasMock (Raw Application m) where
+  mock _ = Raw (\req respond -> do
     bdy <- genBody
-    respond $ responseLBS status200 [] bdy
+    respond $ responseLBS status200 [] bdy)
 
     where genBody = fmap pack $ generate (vector 100 :: Gen [Char])
 

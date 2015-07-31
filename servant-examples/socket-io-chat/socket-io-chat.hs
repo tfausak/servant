@@ -21,8 +21,8 @@ import qualified Network.SocketIO as SocketIO
 import Chat (eioServer, ServerState (..))
 
 
-type API = "socket.io" :> Raw
-    :<|> Raw
+type API = "socket.io" :> Raw Application IO
+    :<|> Raw Application IO
 
 
 api :: Proxy API

@@ -617,10 +617,10 @@ instance (KnownSymbol sym, HasClient sublayout)
 
 -- | Pick a 'Method' and specify where the server you want to query is. You get
 -- back the full `Response`.
-instance HasClient (Raw m a) where
-  type Client (Raw m a) = H.Method -> EitherT ServantError IO (Int, ByteString, MediaType, [HTTP.Header], Response ByteString)
+instance HasClient (Raw a m) where
+  type Client (Raw a m) = H.Method -> EitherT ServantError IO (Int, ByteString, MediaType, [HTTP.Header], Response ByteString)
 
-  clientWithRoute :: Proxy (Raw m a) -> Req -> BaseUrl -> Client (Raw m a)
+  clientWithRoute :: Proxy (Raw a m) -> Req -> BaseUrl -> Client (Raw a m)
   clientWithRoute Proxy req baseurl httpMethod = do
     performRequest httpMethod req (const True) baseurl
 
