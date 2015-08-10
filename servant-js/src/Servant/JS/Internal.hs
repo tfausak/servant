@@ -374,8 +374,8 @@ instance (KnownSymbol sym, HasJS sublayout)
 
     where str = symbolVal (Proxy :: Proxy sym)
 
-instance HasJS (Raw a m) where
-  type JS (Raw a m) = Method -> AjaxReq
+instance HasJS (Raw m a) where
+  type JS (Raw m a) = Method -> AjaxReq
 
   javascriptFor Proxy req method =
     req & funcName %~ ((toLower <$> method) :)
