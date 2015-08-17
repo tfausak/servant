@@ -4,15 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies        #-}
 
-module Servant.Server.Internal.Authentication
-( AuthProtected (..)
-, AuthData (..)
-, AuthHandlers (AuthHandlers, onMissingAuthData, onUnauthenticated)
-, basicAuthLax
-, basicAuthStrict
-, laxProtect
-, strictProtect
-        ) where
+module Servant.Server.Internal.Authentication where
 
 import           Control.Monad              (guard)
 import qualified Data.ByteString            as B
@@ -30,8 +22,7 @@ import           Network.HTTP.Types.Status  (status401)
 import           Network.Wai                (Request, Response, requestHeaders,
                                              responseBuilder)
 import           Servant.API.Authentication (AuthPolicy (Strict, Lax),
-                                             AuthProtected,
-                                             BasicAuth (BasicAuth))
+                                             AuthProtected, BasicAuth (..))
 
 -- | Class to represent the ability to extract authentication-related
 -- data from a 'Request' object.
@@ -82,7 +73,7 @@ instance AuthData (BasicAuth realm) where
         -- decode the base64-encoded username and password
         let (username, passWithColonAtHead) = B.break (== _colon) (decodeLenient (B.dropWhile isSpace y))
         (_, password) <- B.uncons passWithColonAtHead
-        return $ BasicAuth username password
+        return $! BasicAuth username password
 
 -- | handlers for Basic Authentication.
 basicAuthHandlers :: forall realm. KnownSymbol realm => AuthHandlers (BasicAuth realm)

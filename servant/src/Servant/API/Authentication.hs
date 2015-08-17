@@ -4,23 +4,28 @@
 {-# LANGUAGE PolyKinds          #-}
 {-# LANGUAGE TypeFamilies       #-}
 {-# OPTIONS_HADDOCK not-home    #-}
-module Servant.API.Authentication where
+module Servant.API.Authentication
+( AuthPolicy(..)
+, AuthProtect
+, AuthProtected
+, BasicAuth(..)
+) where
 
 import           Data.ByteString (ByteString)
 import           Data.Typeable   (Typeable)
 import           GHC.TypeLits    (Symbol)
 
--- | we can be either Strict or Lax.
+-- | Authentication policy.
 -- Strict: all handlers under 'AuthProtect' take a 'usr' argument.
 --         when auth fails, we call user-supplied handlers to respond.
 -- Lax: all handlers under 'AuthProtect' take a 'Maybe usr' argument.
 --      when auth fails, we call the handlers with 'Nothing'.
 data AuthPolicy = Strict | Lax
 
--- | the combinator to be used in API types
+-- | The combinator to be used in API types
 data AuthProtect authdata usr (policy :: AuthPolicy)
 
--- | what we'll ask user to provide at the server-level when we see a
+-- | What we'll ask user to provide at the server-level when we see a
 -- 'AuthProtect' combinator in an API type
 data family AuthProtected authdata usr subserver :: AuthPolicy -> *
 

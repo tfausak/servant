@@ -326,6 +326,45 @@ data WrappedApi where
                  HasClient api, Client api ~ EitherT ServantError IO ()) =>
     Proxy api -> WrappedApi
 
+-- * auth
+
+type BasicAuthApi
+  =    "foo" :> AuthProtect (BasicAuth "foo") AuthUser 'Strict :> Get '[JSON] Int
+  :<|> ReqBody '[JSON] Int :> "bar" :> AuthProtect (BasicAuth "bar") AuthUser 'Strict :> Post '[JSON] Int
+
+basicAuthApi :: Proxy BasicAuthApi
+basicAuthApi = Proxy
+
+basicAuthServer :: Server BasicAuthApi
+basicAuthServer = basicAuthStrict fooCheck (return 5)
+             :<|> \i -> basicAuthLax    barCheck (return i)
+  where
+    fooCheck (BasicAuth usr pwd) = return $ usr == "McNamara" && pwd == "00000000"
+    barCheck (BasicAuth usr pwd) = return $ pwd == "Swordfish"
+
+fooBasicAuth :: ByteString -> ByteString -> EitherT ServantError IO Int
+barBasicAuth :: Int -> ByteString -> EitherT ServantError IO Int
+fooBasicAuth :<|> barBasicAuth = client basicAuthApi basicAuthServer
+
+basicAuthSpec :: Spec
+basicAuthSpec = describe "BasicAuth" $ do
+
+  context "The user and password are correct" $ do
+    it "returns the expected value" $ do
+       x <- runEitherT $ fooBasicAuth "McNamara" "00000000"
+       x `shouldBe` Right 5
+       y <- runEitherT $ barBasicAuth 10 "any" "Swordfish"
+       x `shouldBe` Right 10
+
+  context "The user and password are incorrect" $ do
+    it "returns a 403" $ do
+       x <- runEitherT $ fooBasicAuth "Rob" "ooooooo"
+       x `shouldBe` Left 5
+       y <- runEitherT $ barBasicAuth 10 "any" "Catfish"
+       x `shouldBe` Left 10
+
+
+
 
 -- * utils
 

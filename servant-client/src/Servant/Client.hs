@@ -686,3 +686,5 @@ instance HasClient api => HasClient (IsSecure :> api) where
 
   clientWithRoute Proxy req baseurl =
     clientWithRoute (Proxy :: Proxy api) req baseurl
+
+{-instance HasClient ap => HasClient (AuthProtect (-}

@@ -68,7 +68,7 @@ import           Servant.API                                ((:<|>) (..), (:>),
                                                              ReqBody, Vault)
 import           Servant.API.Authentication                 (AuthPolicy (Strict, Lax),
                                                              AuthProtect,
-                                                             AuthProtected)
+                                                             AuthProtected(..))
 import           Servant.API.ContentTypes                   (AcceptHeader (..),
                                                              AllCTRender (..),
                                                              AllCTUnrender (..))

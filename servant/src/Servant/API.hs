@@ -62,7 +62,8 @@ module Servant.API (
   ) where
 
 import           Servant.API.Alternative     ((:<|>) (..))
-import           Servant.API.Authentication  (BasicAuth)
+import           Servant.API.Authentication  (AuthPolicy (..), AuthProtect,
+                                              AuthProtected, BasicAuth)
 import           Servant.API.Capture         (Capture)
 import           Servant.API.ContentTypes    (Accept (..), FormUrlEncoded,
                                               FromFormUrlEncoded (..), JSON,
@@ -72,8 +73,8 @@ import           Servant.API.ContentTypes    (Accept (..), FormUrlEncoded,
 import           Servant.API.Delete          (Delete)
 import           Servant.API.Get             (Get)
 import           Servant.API.Header          (Header (..))
-import           Servant.API.HttpVersion     (HttpVersion(..))
-import           Servant.API.IsSecure        (IsSecure(..))
+import           Servant.API.HttpVersion     (HttpVersion (..))
+import           Servant.API.IsSecure        (IsSecure (..))
 import           Servant.API.MatrixParam     (MatrixFlag, MatrixParam,
                                               MatrixParams)
 import           Servant.API.Patch           (Patch)

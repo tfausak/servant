@@ -67,7 +67,7 @@ module Servant.Server
   , err415
   , err416
   , err417
-   -- * 5XX
+   -- ** 5XX
   , err500
   , err501
   , err502
@@ -75,12 +75,20 @@ module Servant.Server
   , err504
   , err505
 
+  -- * Authentication
+  , basicAuthLax
+  , basicAuthStrict
+  , laxProtect
+  , strictProtect
+  , AuthHandlers(AuthHandlers, onMissingAuthData, onUnauthenticated)
+
   ) where
 
 import           Data.Proxy                         (Proxy)
 import           Network.Wai                        (Application)
 import           Servant.Server.Internal
 import           Servant.Server.Internal.Enter
+import           Servant.Server.Internal.Authentication
 
 
 -- * Implementing Servers
