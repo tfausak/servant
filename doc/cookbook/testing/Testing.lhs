@@ -4,7 +4,7 @@ Even with a nicely structured API that passes Haskell's strict type checker,
 it's a good idea to write some tests for your application.
 
 In this recipe we'll work through some common testing strategies and provide
-examples of utlizing these testing strategies in order to test Servant
+examples of utilizing these testing strategies in order to test Servant
 applications.
 
 ## Testing strategies
